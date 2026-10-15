@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confirmaciones WhatsApp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237A2E5E'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11.5' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+</head>
+<body>
+  <!-- Login -->
+  <main id="login" class="login" hidden>
+    <form id="loginForm" class="login-card">
+      <div class="brand-mark" aria-hidden="true">✓</div>
+      <h1>Confirmaciones por WhatsApp</h1>
+      <p class="muted">Ingresa la contraseña del panel.</p>
+      <label class="field">
+        <span>Contraseña</span>
+        <input id="password" type="password" autocomplete="current-password" required>
+      </label>
+      <p id="loginError" class="error" role="alert"></p>
+      <button class="btn primary" type="submit">Entrar</button>
+    </form>
+  </main>
+
+  <!-- App -->
+  <div id="app" class="app" hidden>
+    <nav class="rail" aria-label="Secciones">
+      <div class="rail-brand">
+        <div class="brand-mark" aria-hidden="true">✓</div>
+        <div>
+          <strong id="storeName">Tienda</strong>
+          <span class="muted small">Confirmaciones</span>
+        </div>
+      </div>
+      <button class="rail-link active" data-view="inbox">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg>
+        Conversaciones <span id="attentionCount" class="count" hidden></span>
+      </button>
+      <button class="rail-link" data-view="silent">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 9h6"/></svg>
+        Sin mensaje <span id="silentCount" class="count quiet" hidden></span>
+      </button>
+      <button class="rail-link" data-view="metrics">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
+        Métricas
+      </button>
+      <div class="rail-foot">
+        <ul id="health" class="health"></ul>
+        <button id="logout" class="link-btn small">Cerrar sesión</button>
+      </div>
+    </nav>
+
+    <!-- Bandeja -->
+    <section id="view-inbox" class="inbox">
+      <aside class="list-pane" aria-label="Conversaciones">
+        <div class="list-head">
+          <input id="search" type="search" placeholder="Buscar por nombre, teléfono o pedido" aria-label="Buscar">
+          <div id="filters" class="chips" role="tablist">
+            <button class="chip active" data-filter="all">Todas</button>
+            <button class="chip" data-filter="human">Requieren atención</button>
+            <button class="chip" data-filter="ready">Listos para Dropi</button>
+            <button class="chip" data-filter="address">Dirección por revisar</button>
+            <button class="chip" data-filter="prepay">Pago por adelantado</button>
+            <button class="chip" data-filter="pending">Pendientes</button>
+            <button class="chip" data-filter="confirmed">Confirmados</button>
+            <button class="chip" data-filter="cancelled">Cancelados</button>
+            <button class="chip" data-filter="no_order">Sin pedido</button>
+          </div>
+        </div>
+        <ul id="convList" class="conv-list"></ul>
+      </aside>
+
+      <section id="chatPane" class="chat-pane" aria-live="polite">
+        <div id="chatEmpty" class="empty">
+          <p class="empty-title">Elige una conversación</p>
+          <p class="muted">Cuando un cliente escriba a tu WhatsApp, aparecerá en la lista. Las que necesitan a una persona quedan arriba.</p>
+        </div>
+        <div id="chat" class="chat" hidden>
+          <header class="chat-head">
+            <button id="backToList" class="icon-btn mobile-only" aria-label="Volver a la lista">
+              <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+            </button>
+            <div class="chat-who">
+              <strong id="chatName"></strong>
+              <span id="chatPhone" class="muted small"></span>
+            </div>
+            <label class="toggle" title="Cuando el bot está pausado, solo responden personas">
+              <input id="botToggle" type="checkbox">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span id="botLabel">Bot activo</span>
+            </label>
+            <button id="toggleOrder" class="icon-btn order-btn" aria-label="Ver pedido">
+              <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6"/></svg>
+            </button>
+          </header>
+          <div id="humanBanner" class="banner" hidden></div>
+          <ol id="messages" class="messages"></ol>
+          <form id="composer" class="composer">
+            <p id="windowNote" class="window-note" hidden>Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite responder con texto libre hasta que vuelva a escribir.</p>
+            <div class="composer-row">
+              <textarea id="replyText" rows="1" placeholder="Responder (pausa el bot)" aria-label="Respuesta"></textarea>
+              <button class="btn primary" type="submit">Enviar</button>
+            </div>
+          </form>
+          <form id="simulator" class="simulator" hidden>
+            <span class="small">Modo demo: escribe como si fueras el cliente</span>
+            <div class="composer-row">
+              <input id="simText" placeholder="Ej: hola, quiero confirmar mi pedido #1001" aria-label="Mensaje del cliente simulado">
+              <button class="btn" type="submit">Simular</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <aside id="orderPane" class="order-pane" aria-label="Pedido"></aside>
+    </section>
+
+    <!-- Pedidos sin mensaje -->
+    <section id="view-silent" class="silent" hidden>
+      <header class="metrics-head">
+        <div>
+          <h1>Sin mensaje</h1>
+          <p class="muted silent-intro">Pedidos que terminaron la compra pero no enviaron el mensaje de WhatsApp. Llámalos o mándales un recordatorio.</p>
+        </div>
+        <div class="silent-tools">
+          <label class="check"><input type="checkbox" id="showDismissed"> Ver descartados</label>
+          <button class="btn" id="syncNow">Revisar Shopify ahora</button>
+        </div>
+      </header>
+      <div id="reminderInfo"></div>
+      <div id="silentBody"></div>
+    </section>
+
+    <!-- Métricas -->
+    <section id="view-metrics" class="metrics" hidden>
+      <header class="metrics-head">
+        <h1>Métricas</h1>
+        <div class="segmented" role="group" aria-label="Periodo">
+          <button data-days="7" class="active">7 días</button>
+          <button data-days="30">30 días</button>
+          <button data-days="90">90 días</button>
+        </div>
+      </header>
+      <div id="metricsBody"></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="tooltip" class="tooltip" hidden></div>
+
+  <!-- Simulador para demo sin pedido abierto -->
+  <dialog id="newSim" class="dialog">
+    <form method="dialog" id="newSimForm">
+      <h2>Simular un cliente nuevo</h2>
+      <label class="field"><span>Teléfono</span><input id="simPhone" value="56987654321"></label>
+      <label class="field"><span>Nombre en WhatsApp</span><input id="simName" value="Camila"></label>
+      <label class="field"><span>Primer mensaje</span><input id="simFirst" value="Hola! quiero confirmar mi compra"></label>
+      <p class="muted small">En demo existen los pedidos #1001 (teléfono +56 9 8765 4321) y #1002 (+56 9 1234 5678).</p>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel">Cerrar</button>
+        <button class="btn primary" value="ok">Enviar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

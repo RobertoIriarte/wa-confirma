@@ -1,0 +1,14 @@
+{
+  "name": "wa-confirma",
+  "version": "1.0.0",
+  "description": "Agente de WhatsApp para confirmar pedidos de Shopify, con panel de conversaciones y métricas",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "demo": "DEMO=true STORE_NAME='Her Essence' node --disable-warning=ExperimentalWarning src/server.js"
+  }
+}
