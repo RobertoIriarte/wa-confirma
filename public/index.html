@@ -2,7 +2,14 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#7A2E5E">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Confirmaciones">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon-192.png">
   <title>Confirmaciones WhatsApp</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -97,10 +104,11 @@
               <svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6"/></svg>
             </button>
           </header>
+          <button id="orderStrip" class="order-strip" type="button" hidden aria-label="Ver pedido"></button>
           <div id="humanBanner" class="banner" hidden></div>
           <ol id="messages" class="messages"></ol>
           <form id="composer" class="composer">
-            <p id="windowNote" class="window-note" hidden>Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite responder con texto libre hasta que vuelva a escribir.</p>
+            <p id="windowNote" class="window-note" hidden><span class="long">Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite responder con texto libre hasta que vuelva a escribir.</span><span class="short">Más de 24 h sin mensajes de la clienta: no puedes escribirle hasta que ella escriba.</span></p>
             <div class="composer-row">
               <textarea id="replyText" rows="1" placeholder="Responder (pausa el bot)" aria-label="Respuesta"></textarea>
               <button class="btn primary" type="submit">Enviar</button>

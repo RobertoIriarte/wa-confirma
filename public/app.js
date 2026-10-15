@@ -194,7 +194,7 @@ async function openConv(id) {
   await loadConv(true);
   loadList();
 }
-$('#backToList').addEventListener('click', () => { $('#view-inbox').classList.remove('chat-open'); });
+$('#backToList').addEventListener('click', () => { $('#view-inbox').classList.remove('chat-open'); $('#orderPane').classList.remove('open'); });
 $('#toggleOrder').addEventListener('click', () => $('#orderPane').classList.toggle('open'));
 
 async function loadConv(scroll = false) {
@@ -208,6 +208,7 @@ async function loadConv(scroll = false) {
   $('#chatPhone').textContent = phone(c.wa_id);
   $('#botToggle').checked = !c.bot_paused;
   $('#botLabel').textContent = c.bot_paused ? 'Bot pausado' : 'Bot activo';
+  $('#botLabel').dataset.short = c.bot_paused ? 'Pausado' : 'Bot';
   const banner = $('#humanBanner');
   if (c.needs_human) {
     banner.hidden = false;
@@ -238,10 +239,21 @@ function renderMessages(msgs, scrollDown) {
   if (scrollDown || nearBottom) ol.scrollTop = ol.scrollHeight;
 }
 
+function renderStrip(o) {
+  const strip = $('#orderStrip');
+  if (!o) { strip.hidden = false; strip.className = 'order-strip none'; strip.innerHTML = '<span>Sin pedido vinculado</span><span class="strip-go">Vincular</span>'; return; }
+  const v = o.dropi ? VERDICT[o.dropi.verdict] : null;
+  strip.hidden = false;
+  strip.className = `order-strip ${v ? v[0] : ''}`;
+  strip.innerHTML = `<strong>${esc(o.name)}</strong>${badge(o.status)}<span class="strip-total">${money(o.total, o.currency)}</span>${v ? `<span class="strip-verdict">${esc(v[1])}</span>` : ''}<span class="strip-go" aria-hidden="true">›</span>`;
+}
+$('#orderStrip').addEventListener('click', () => $('#orderPane').classList.add('open'));
+
 function renderOrder(d, prevStatus) {
   const pane = $('#orderPane');
   const o = d.orders[0];
-  const closeBtn = '<button class="icon-btn pane-close" aria-label="Cerrar pedido" onclick="this.closest(\'.order-pane\').classList.remove(\'open\')"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+  renderStrip(o);
+  const closeBtn = '<div class="pane-top"><span class="pane-top-title">Pedido</span><button class="icon-btn pane-close" aria-label="Cerrar pedido" onclick="this.closest(\'.order-pane\').classList.remove(\'open\')"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
   if (!o) {
     pane.innerHTML = `${closeBtn}
       <h2 class="pane-title">Sin pedido vinculado</h2>
