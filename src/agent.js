@@ -1,5 +1,5 @@
 // El agente: decide qué responder a cada mensaje entrante
-import { config, aiReady } from './config.js';
+import { config, aiReady, shopifyReady } from './config.js';
 import * as db from './db.js';
 import * as wa from './whatsapp.js';
 import * as shopify from './shopify.js';
@@ -243,7 +243,16 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId })
   const parsed = parseOrderMessage(text);
   if (!order || (parsed.number && shopify.digits(order.name) !== parsed.number)) {
     let found = {};
-    try { found = await locateOrder(waId, text); } catch (e) { console.error('[shopify]', e.message); }
+    // Si no se puede consultar Shopify, no se le dice a la clienta que su pedido no existe: se deriva a una persona
+    let lookupError = null;
+    if (!shopifyReady() && !config.demo) lookupError = 'Shopify no está conectado (faltan SHOPIFY_CLIENT_ID y SHOPIFY_CLIENT_SECRET)';
+    else {
+      try { found = await locateOrder(waId, text); } catch (e) { console.error('[shopify]', e.message); lookupError = `No se pudo consultar Shopify: ${e.message}`; }
+    }
+    if (lookupError && (extractOrderNumber(text) || parsed.isConfirmation)) {
+      db.logEvent(waId, null, 'shopify_error', lookupError);
+      return handoff(waId, null, lookupError, 'bot', '¡Gracias por escribirnos! 💗 Recibimos tu mensaje. Una persona del equipo revisará tu pedido y te responderá por aquí a la brevedad 🙌');
+    }
     if (found.order) {
       order = db.linkOrder(found.order, waId, verified(found.order, waId));
       if (order.wa_id !== waId) return handoff(waId, null, `Menciona el pedido ${order.name}, que ya está en otra conversación`);
