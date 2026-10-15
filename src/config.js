@@ -74,6 +74,10 @@ export const config = {
   ai: {
     apiKey: env.ANTHROPIC_API_KEY || '',
     model: env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+    openaiKey: env.OPENAI_API_KEY || '',
+    openaiModel: env.OPENAI_MODEL || 'gpt-5-mini',
+    // openai | anthropic. Por defecto: el que tenga clave (si están ambas, OpenAI)
+    provider: (env.AI_PROVIDER || (env.OPENAI_API_KEY ? 'openai' : 'anthropic')).toLowerCase(),
     historyMessages: Number(env.AI_HISTORY_MESSAGES || 20),
   },
 
@@ -86,4 +90,5 @@ export const config = {
 export const whatsappReady = () => Boolean(config.whatsapp.token && config.whatsapp.phoneNumberId);
 export const shopifyReady = () =>
   Boolean(config.shopify.domain && (config.shopify.accessToken || (config.shopify.clientId && config.shopify.clientSecret)));
-export const aiReady = () => Boolean(config.ai.apiKey);
+export const aiReady = () => Boolean(config.ai.provider === 'openai' ? config.ai.openaiKey : config.ai.apiKey);
+export const aiModelName = () => (config.ai.provider === 'openai' ? `OpenAI ${config.ai.openaiModel}` : config.ai.model);

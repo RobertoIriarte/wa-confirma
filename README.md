@@ -121,8 +121,8 @@ Puedes poner el mismo enlace en la página de gracias con un bloque de texto o b
 
 Google incluye 10.000 consultas gratis al mes para Geocoding, y el agente consulta una vez por pedido, así que con tu volumen no deberías pagar. Si Google falla o la clave está mal, la dirección queda "sin validar" y no se bloquea ningún pedido.
 
-### 6. IA (Claude)
-Crea una clave en [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY`. Por defecto usa `claude-haiku-5-5`, el modelo más económico, suficiente para este tipo de conversación. Sin clave, el bot funciona solo con botones y respuestas fijas.
+### 6. IA (OpenAI o Claude)
+Basta una de las dos. Con OpenAI: crea una clave en [platform.openai.com/api-keys](https://platform.openai.com/api-keys) → `OPENAI_API_KEY` (modelo por defecto `gpt-5-mini`, se cambia con `OPENAI_MODEL`). Con Claude: clave de [console.anthropic.com](https://console.anthropic.com) → `ANTHROPIC_API_KEY`. Sin ninguna, el bot funciona solo con botones y respuestas fijas.
 
 ### 7. Probar
 Abre `https://TU-DOMINIO`, entra con tu contraseña y revisa que en la barra lateral WhatsApp, Shopify e IA aparezcan conectados. Escríbele a tu número desde otro teléfono con el número de un pedido real.

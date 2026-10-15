@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { config, whatsappReady, shopifyReady, aiReady } from './config.js';
+import { config, whatsappReady, shopifyReady, aiReady, aiModelName } from './config.js';
 import * as db from './db.js';
 import * as wa from './whatsapp.js';
 import * as shopify from './shopify.js';
@@ -129,7 +129,7 @@ async function api(req, res, url) {
 
   if (p === '/api/status') {
     let shop = null; try { shop = await shopify.ping(); } catch (e) { shop = { ok: false, reason: e.message }; }
-    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
+    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
   }
   if (p === '/api/conversations' && req.method === 'GET') {
     return send(res, 200, db.listConversations({ filter: url.searchParams.get('filter') || 'all', q: url.searchParams.get('q') || '' }));
@@ -277,7 +277,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(config.port, () => {
   console.log(`WhatsApp Confirma escuchando en :${config.port}`);
-  console.log(`  WhatsApp: ${whatsappReady() ? 'conectado' : 'SIMULADO'} | Shopify: ${shopifyReady() ? config.shopify.domain : config.demo ? 'pedidos demo' : 'sin configurar'} | IA: ${aiReady() ? config.ai.model : 'desactivada'}${config.demo ? ' | MODO DEMO' : ''}`);
+  console.log(`  WhatsApp: ${whatsappReady() ? 'conectado' : 'SIMULADO'} | Shopify: ${shopifyReady() ? config.shopify.domain : config.demo ? 'pedidos demo' : 'sin configurar'} | IA: ${aiReady() ? aiModelName() : 'desactivada'}${config.demo ? ' | MODO DEMO' : ''}`);
   if (!config.dashboard.password && !config.demo) console.warn('  ⚠️  Falta DASHBOARD_PASSWORD: el panel no se puede abrir.');
   reminders.startScheduler();
 });

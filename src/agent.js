@@ -348,7 +348,19 @@ function history(waId) {
   return out;
 }
 
-async function callClaude(system, messages) {
+// ---------- proveedores de IA (OpenAI o Anthropic) ----------
+// La conversación se guarda en un formato neutro y se traduce a cada proveedor:
+//   { role: 'user'|'assistant', content: 'texto' }
+//   { role: 'assistant', text, toolCalls: [{ id, name, input }] }
+//   { role: 'tool', results: [{ id, content }] }
+// Devuelve { text, toolCalls: [{ id, name, input }] }
+
+async function callAnthropic(system, convo) {
+  const messages = convo.map((m) => {
+    if (m.role === 'tool') return { role: 'user', content: m.results.map((r) => ({ type: 'tool_result', tool_use_id: r.id, content: r.content })) };
+    if (m.toolCalls) return { role: 'assistant', content: [...(m.text ? [{ type: 'text', text: m.text }] : []), ...m.toolCalls.map((t) => ({ type: 'tool_use', id: t.id, name: t.name, input: t.input }))] };
+    return { role: m.role, content: m.content };
+  });
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': config.ai.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -356,38 +368,70 @@ async function callClaude(system, messages) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Claude ${res.status}: ${data?.error?.message || ''}`);
-  return data;
+  return {
+    text: data.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim(),
+    toolCalls: data.stop_reason === 'tool_use' ? data.content.filter((c) => c.type === 'tool_use').map((c) => ({ id: c.id, name: c.name, input: c.input || {} })) : [],
+  };
 }
 
+async function callOpenAI(system, convo) {
+  const messages = [{ role: 'system', content: system }];
+  for (const m of convo) {
+    if (m.role === 'tool') for (const r of m.results) messages.push({ role: 'tool', tool_call_id: r.id, content: String(r.content) });
+    else if (m.toolCalls) messages.push({ role: 'assistant', content: m.text || null, tool_calls: m.toolCalls.map((t) => ({ id: t.id, type: 'function', function: { name: t.name, arguments: JSON.stringify(t.input || {}) } })) });
+    else messages.push({ role: m.role, content: m.content });
+  }
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${config.ai.openaiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: config.ai.openaiModel,
+      messages,
+      tools: TOOLS.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } })),
+      max_completion_tokens: 2000,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${data?.error?.message || ''}`);
+  const msg = data.choices?.[0]?.message || {};
+  return {
+    text: String(msg.content || '').trim(),
+    toolCalls: (msg.tool_calls || []).filter((t) => t.type === 'function').map((t) => {
+      let input = {}; try { input = JSON.parse(t.function.arguments || '{}'); } catch { /* argumentos inválidos */ }
+      return { id: t.id, name: t.function.name, input };
+    }),
+  };
+}
+
+const callAI = (system, convo) => (config.ai.provider === 'openai' ? callOpenAI(system, convo) : callAnthropic(system, convo));
+
 async function runAI(waId, order, notFoundNumber) {
-  const messages = history(waId);
-  if (!messages.length) return;
+  const convo = history(waId);
+  if (!convo.length) return;
   let current = order;
   let ended = false; // una herramienta ya respondió y cerró el turno
 
   for (let step = 0; step < 4; step++) {
-    const res = await callClaude(systemPrompt(current, notFoundNumber, waId), messages);
-    const toolUses = res.content.filter((c) => c.type === 'tool_use');
-    const text = res.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+    const { text, toolCalls } = await callAI(systemPrompt(current, notFoundNumber, waId), convo);
 
-    if (!toolUses.length || res.stop_reason !== 'tool_use') {
+    if (!toolCalls.length) {
       if (text && !(ended && text.length < 3)) await wa.sendText(waId, text, 'ai');
       return;
     }
 
-    messages.push({ role: 'assistant', content: res.content });
+    convo.push({ role: 'assistant', text, toolCalls });
     const results = [];
-    for (const t of toolUses) {
+    for (const t of toolCalls) {
       let out;
       try {
         out = await runTool(t.name, t.input || {}, waId, current);
         if (out.order) current = out.order;
         if (out.ended) ended = true;
       } catch (e) { out = { result: `Error: ${e.message}` }; }
-      results.push({ type: 'tool_result', tool_use_id: t.id, content: out.result });
+      results.push({ id: t.id, content: out.result });
     }
-    messages.push({ role: 'user', content: results });
-    if (ended && toolUses.every((t) => t.name !== 'buscar_pedido')) {
+    convo.push({ role: 'tool', results });
+    if (ended && toolCalls.every((t) => t.name !== 'buscar_pedido')) {
       // Las acciones finales ya enviaron su mensaje: no hace falta otra vuelta
       return;
     }
