@@ -185,6 +185,17 @@ export function markFirstReply(waId) {
   db.prepare(`UPDATE orders SET first_reply_at = ? WHERE wa_id = ? AND first_reply_at IS NULL`).run(now(), waId);
 }
 
+// Borra todo lo que el agente recuerda de un número (mensajes, pedidos vinculados, eventos)
+export function deleteConversation(waId) {
+  const orders = db.prepare('SELECT id FROM orders WHERE wa_id = ?').all(waId).map((o) => o.id);
+  db.prepare('DELETE FROM messages WHERE wa_id = ?').run(waId);
+  db.prepare('DELETE FROM orders WHERE wa_id = ?').run(waId);
+  db.prepare('DELETE FROM events WHERE wa_id = ?').run(waId);
+  db.prepare('DELETE FROM contacts WHERE wa_id = ?').run(waId);
+  if (orders.length) db.prepare(`UPDATE shop_orders SET reminder_status = NULL, reminder_at = NULL, reminder_error = NULL WHERE id IN (${orders.map(() => '?').join(',')})`).run(...orders);
+  return orders;
+}
+
 export function logEvent(waId, orderId, type, detail) {
   db.prepare('INSERT INTO events (wa_id, order_id, type, detail, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(waId || null, orderId || null, type, detail == null ? null : String(detail), now());

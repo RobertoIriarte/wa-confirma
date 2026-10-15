@@ -172,6 +172,15 @@ async function api(req, res, url) {
       const r = await orderSummaryButtons(waId, o);
       return send(res, r.ok ? 200 : 502, r);
     }
+    if (action === 'delete' && req.method === 'POST') {
+      const orderIds = db.deleteConversation(waId);
+      // Quita las etiquetas del agente en Shopify para que el pedido vuelva a quedar como nuevo
+      const T = config.shopify.tags;
+      for (const id of orderIds) {
+        try { await shopify.removeTags(id, [T.confirmed, T.cancelled, T.review, T.prepay]); } catch (e) { console.error('[shopify]', e.message); }
+      }
+      return send(res, 200, { ok: true, orders: orderIds.length });
+    }
     if (action === 'link' && req.method === 'POST') {
       const { number } = await json(req);
       const o = await shopify.findOrderByNumber(number);

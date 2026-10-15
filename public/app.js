@@ -195,6 +195,18 @@ async function openConv(id) {
   loadList();
 }
 $('#backToList').addEventListener('click', () => { $('#view-inbox').classList.remove('chat-open'); $('#orderPane').classList.remove('open'); });
+$('#deleteConv').addEventListener('click', async () => {
+  const c = state.detail?.contact; if (!c) return;
+  if (!confirm(`¿Borrar toda la conversación con ${c.name || phone(c.wa_id)}?\n\nSe eliminan los mensajes guardados, se desvinculan sus pedidos y se quitan las etiquetas WA- en Shopify. El próximo mensaje de este número se tratará como nuevo. Esto no borra nada en el WhatsApp de la clienta.`)) return;
+  try {
+    await api(`/api/conversations/${encodeURIComponent(c.wa_id)}/delete`, { method: 'POST' });
+    toast('Conversación borrada');
+    state.current = null; state.detail = null;
+    $('#chat').hidden = true; $('#chatEmpty').hidden = false; $('#orderPane').innerHTML = ''; $('#orderPane').classList.remove('open');
+    $('#view-inbox').classList.remove('chat-open');
+    loadList();
+  } catch (e) { toast(e.message); }
+});
 $('#toggleOrder').addEventListener('click', () => $('#orderPane').classList.toggle('open'));
 
 async function loadConv(scroll = false) {
