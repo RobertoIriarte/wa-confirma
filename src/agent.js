@@ -300,7 +300,7 @@ const lastInboundText = (waId) => db.getMessages(waId, 1)[0]?.body || '';
 // ---------- IA (Claude) ----------
 const TOOLS = [
   { name: 'buscar_pedido', description: 'Busca un pedido de la tienda por su número (ej. 1001) y lo vincula a esta conversación. Úsalo cuando el cliente entregue su número de pedido.', input_schema: { type: 'object', properties: { numero: { type: 'string' } }, required: ['numero'] } },
-  { name: 'mostrar_resumen_con_botones', description: 'Envía al cliente el resumen del pedido vinculado con los botones Confirmar / Cancelar / Hablar con alguien. Si lo usas, no repitas el resumen en tu respuesta.', input_schema: { type: 'object', properties: {} } },
+  { name: 'mostrar_resumen_con_botones', description: 'Envía los botones Confirmar / Cancelar / Hablar con equipo para el pedido vinculado (con el resumen del pedido si no se ha mostrado recién). Si la clienta hizo una pregunta, ponla respondida en "respuesta": se envía antes de los botones. No repitas el resumen en tu texto.', input_schema: { type: 'object', properties: { respuesta: { type: 'string', description: 'Respuesta breve a lo que preguntó o dijo la clienta. Obligatoria si hizo una pregunta; vacía si solo saludó.' } }, required: ['respuesta'] } },
   { name: 'confirmar_pedido', description: 'Marca el pedido vinculado como confirmado. Solo si el cliente expresó claramente que confirma. Envía automáticamente el mensaje de confirmación; no lo repitas.', input_schema: { type: 'object', properties: {} } },
   { name: 'cancelar_pedido', description: 'Cancela el pedido vinculado. Solo si el cliente pidió explícitamente cancelar y lo ratificó. Envía automáticamente el aviso; no lo repitas.', input_schema: { type: 'object', properties: { motivo: { type: 'string' } } } },
   { name: 'derivar_a_humano', description: 'Pasa la conversación a una persona del equipo y pausa el bot. Úsalo para: cambios de dirección, productos o cantidades, reclamos, pagos, devoluciones, dudas que no puedes responder con la información disponible, o si el cliente lo pide. Envía automáticamente el aviso al cliente.', input_schema: { type: 'object', properties: { motivo: { type: 'string' } }, required: ['motivo'] } },
@@ -316,7 +316,7 @@ Tu objetivo principal es que el cliente confirme o cancele su pedido. Reglas:
 - Nunca inventes plazos, precios, stock, políticas ni estados de envío. Si no está en la información de abajo, usa derivar_a_humano.
 - No puedes modificar pedidos (dirección, productos, cantidades, pagos): para eso usa derivar_a_humano.
 - Solo confirma o cancela cuando el cliente lo exprese claramente. Ante la duda, usa mostrar_resumen_con_botones.
-- Si el pedido está pendiente y la clienta hizo una pregunta, primero respóndela en tu texto y en la misma respuesta usa mostrar_resumen_con_botones para que confirme.
+- Si el pedido está pendiente y la clienta hizo una pregunta: respóndela SIEMPRE (en el campo "respuesta" de mostrar_resumen_con_botones, o como texto si no usas la herramienta). Nunca dejes una pregunta sin responder.
 - Si no hay pedido vinculado, pide el número de pedido (aparece en el correo de compra, ej. #1001) y usa buscar_pedido.
 - Las herramientas confirmar_pedido, cancelar_pedido, derivar_a_humano y mostrar_resumen_con_botones ya envían su propio mensaje: después de usarlas responde con texto vacío salvo que haga falta agregar algo distinto.
 - Si el cliente envía audio o imagen que no puedes ver, pídele amablemente que lo escriba.
@@ -426,13 +426,15 @@ async function runAI(waId, order, notFoundNumber) {
       return;
     }
 
-    if (text && text.length > 2) await wa.sendText(waId, text, 'ai');
+    const textSent = Boolean(text && text.length > 2);
+    if (textSent) await wa.sendText(waId, text, 'ai');
+    console.log('[ia]', toolCalls.map((t) => t.name).join(', '), textSent ? '(con texto)' : '(sin texto)');
     convo.push({ role: 'assistant', text, toolCalls });
     const results = [];
     for (const t of toolCalls) {
       let out;
       try {
-        out = await runTool(t.name, t.input || {}, waId, current);
+        out = await runTool(t.name, t.input || {}, waId, current, { textSent });
         if (out.order) current = out.order;
         if (out.ended) ended = true;
       } catch (e) { out = { result: `Error: ${e.message}` }; }
@@ -446,7 +448,7 @@ async function runAI(waId, order, notFoundNumber) {
   }
 }
 
-async function runTool(name, input, waId, order) {
+async function runTool(name, input, waId, order, ctx = {}) {
   switch (name) {
     case 'buscar_pedido': {
       const o = await shopify.findOrderByNumber(input.numero);
@@ -455,10 +457,17 @@ async function runTool(name, input, waId, order) {
       if (linked.wa_id !== waId) return { result: `El pedido ${o.name} ya está vinculado a otro número. Usa derivar_a_humano.` };
       return { order: linked, result: `Pedido ${linked.name} encontrado y vinculado. Estado: ${linked.status}. Usa mostrar_resumen_con_botones para que el cliente confirme.` };
     }
-    case 'mostrar_resumen_con_botones':
+    case 'mostrar_resumen_con_botones': {
       if (!order) return { result: 'No hay pedido vinculado.' };
-      await sendSummary(waId, order, 'ai');
-      return { ended: true, result: 'Resumen enviado con botones.' };
+      const answer = String(input.respuesta || '').trim();
+      if (answer && !ctx.textSent) await wa.sendText(waId, answer, 'ai');
+      // Si el resumen completo se mostró hace poco, solo se envían los botones con una línea
+      const recent = db.getMessages(waId, 12).some((m) => m.direction === 'out' && m.kind === 'buttons' && /Este es tu pedido|Encontré el pedido/.test(m.body || '')
+        && Date.now() - new Date(m.created_at) < 6 * 3600e3);
+      if (recent && order.status === 'pending') await wa.sendButtons(waId, `¿Confirmas tu pedido *${order.name}* para despacharlo?`, confirmButtons(order), 'ai');
+      else await sendSummary(waId, order, 'ai');
+      return { ended: true, result: 'Botones enviados.' };
+    }
     case 'confirmar_pedido':
       if (!order) return { result: 'No hay pedido vinculado.' };
       await confirm(waId, order, 'ai');
