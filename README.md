@@ -22,7 +22,7 @@ Agente de WhatsApp que confirma los pedidos de tu tienda Shopify, con un panel p
 Cada hora (9:00 a 22:00) una revisión programada en Claude consulta en Dropi el historial de las clientas con pedidos nuevos y lo deja escrito en el pedido de Shopify: etiqueta `HIST-OK`, `HIST-BAJO` o `HIST-SIN-REGISTRO`, más una nota *"Historial Dropi: 85% positivo (entregas 80%, devoluciones 14%)"*. Positivo = entregados ÷ (entregados + devueltos); los pedidos en tránsito no cuentan.
 
 - **70% o más, o sin registro** (clienta nueva): pasa.
-- **Bajo 70%**: cuando la clienta confirma, el agente le pide pago por transferencia antes del despacho con los datos de `PREPAY_INFO`, etiqueta el pedido `PAGO-ADELANTADO` y lo pasa al equipo para verificar el comprobante. En el panel, **Marcar pago recibido** lo deja listo para Dropi. Si ya pasaron más de 24 horas desde su último mensaje, no se puede escribir por WhatsApp y queda marcado para llamarla.
+- **Bajo 70%**: la clienta no se entera. Recibe el mismo mensaje neutro de siempre (*"Recibimos la confirmación de su pedido… ahora lo preparamos para el despacho"*) y el pedido queda marcado en el panel como **"Historial bajo: decidir si se despacha"**, con la etiqueta `WA-REVISAR` en Shopify. Tú decides si lo llamas, lo cancelas o tocas **Aprobar despacho igual**. (Con `HISTORY_LOW_ACTION=prepay` el agente pide transferencia en su lugar.)
 - Mientras el historial no se haya revisado, el pedido no aparece como "listo".
 
 El servidor lee el historial desde Shopify porque el acceso a Dropi está en tu cuenta de Claude, no en el servidor. Si más adelante consigues un token de la API de Dropi, se puede consultar directo.

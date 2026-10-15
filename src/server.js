@@ -27,8 +27,9 @@ function dropiVerdict(o, waId, allOrders) {
   const minRate = config.history.minRate;
   if (o.hist_status === 'ok') add(true, `Historial ${o.hist_rate != null ? `${o.hist_rate}% positivo` : 'positivo'} en Dropi`);
   else if (o.hist_status === 'sin_registro') add(true, 'Sin historial en Dropi (clienta nueva, pasa)');
-  else if (o.hist_status === 'bajo' && o.prepaid_at) add(true, `Historial ${o.hist_rate ?? '?'}% (bajo ${minRate}%), pero pagó por adelantado`);
-  else if (o.hist_status === 'bajo') add(false, `Historial ${o.hist_rate ?? '?'}% positivo, bajo el mínimo de ${minRate}%: ${o.prepay_requested_at ? 'se pidió transferencia, falta el comprobante' : o.prepay_error || 'hay que pedir transferencia'}`);
+  else if (o.hist_status === 'bajo' && o.prepaid_at) add(true, config.history.lowAction === 'prepay' ? `Historial ${o.hist_rate ?? '?'}% (bajo ${minRate}%), pero pagó por adelantado` : `Historial ${o.hist_rate ?? '?'}% (bajo ${minRate}%), despacho aprobado por el equipo`);
+  else if (o.hist_status === 'bajo' && config.history.lowAction === 'prepay') add(false, `Historial ${o.hist_rate ?? '?'}% positivo, bajo el mínimo de ${minRate}%: ${o.prepay_requested_at ? 'se pidió transferencia, falta el comprobante' : o.prepay_error || 'hay que pedir transferencia'}`);
+  else if (o.hist_status === 'bajo') add(false, `Historial ${o.hist_rate ?? '?'}% positivo, bajo el mínimo de ${minRate}%: decidir si se despacha (la clienta no fue avisada)`);
   else add(null, 'Historial en Dropi aún sin revisar (se revisa cada hora)');
   const same = shopify.samePhone(o.phone, waId);
   add(same ? true : null, same ? 'El WhatsApp coincide con el teléfono del pedido' : 'El WhatsApp no coincide con el teléfono del pedido');
@@ -37,7 +38,8 @@ function dropiVerdict(o, waId, allOrders) {
   if (others.length) add(false, `Tiene otro${others.length > 1 ? 's' : ''} ${others.length} pedido${others.length > 1 ? 's' : ''} abierto${others.length > 1 ? 's' : ''} esta semana (${others.map((x) => x.name).join(', ')})`);
   let verdict;
   if (o.status === 'cancelled') verdict = 'no_despachar';
-  else if (o.hist_status === 'bajo' && !o.prepaid_at && checks.filter((c) => c.ok === false).length === 1) verdict = 'prepago';
+  else if (config.history.lowAction === 'prepay' && o.hist_status === 'bajo' && !o.prepaid_at && checks.filter((c) => c.ok === false).length === 1) verdict = 'prepago';
+  else if (o.hist_status === 'bajo' && !o.prepaid_at && checks.filter((c) => c.ok === false).length === 1) verdict = 'historial_bajo';
   else if (checks.some((c) => c.ok === false)) verdict = 'revisar';
   else if (o.status === 'confirmed' && !o.hist_status) verdict = 'historial';
   else if (o.status === 'confirmed') verdict = 'listo';
@@ -129,7 +131,7 @@ async function api(req, res, url) {
 
   if (p === '/api/status') {
     let shop = null; try { shop = await shopify.ping(); } catch (e) { shop = { ok: false, reason: e.message }; }
-    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
+    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
   }
   if (p === '/api/conversations' && req.method === 'GET') {
     return send(res, 200, db.listConversations({ filter: url.searchParams.get('filter') || 'all', q: url.searchParams.get('q') || '' }));
@@ -244,7 +246,7 @@ async function api(req, res, url) {
     if (!['confirmed', 'cancelled', 'pending'].includes(status)) return send(res, 400, { error: 'Estado inválido' });
     const r = await applyStatus(id, status, 'human', { cancelInShopify: Boolean(cancelInShopify), note: 'Cancelado desde el panel de WhatsApp' });
     if (notify && r.order?.wa_id) {
-      const msg = status === 'confirmed' ? `¡Listo! Su pedido *${r.order.name}* quedó confirmado ✅ Le avisaremos cuando sea despachado.`
+      const msg = status === 'confirmed' ? `¡Muchas gracias! 💗 Recibimos la confirmación de su pedido *${r.order.name}* ✅ Ahora lo preparamos para el despacho y le avisaremos cuando vaya en camino.`
         : status === 'cancelled' ? `Su pedido *${r.order.name}* fue cancelado. Si necesita algo más, escríbanos 🙌` : null;
       if (msg) await wa.sendText(r.order.wa_id, msg, 'human');
     }

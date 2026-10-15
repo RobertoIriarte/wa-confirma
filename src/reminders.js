@@ -5,7 +5,7 @@ import * as db from './db.js';
 import * as shopify from './shopify.js';
 import * as wa from './whatsapp.js';
 import { money } from './orders.js';
-import { requestPrepay } from './agent.js';
+import { handleLowHistory } from './agent.js';
 
 const R = config.reminders;
 
@@ -46,8 +46,9 @@ export async function syncOrders() {
     if (linked && o.history?.status) {
       db.updateOrderHistory(o.id, o.history);
       const cur = db.getOrder(o.id);
-      if (cur.hist_status === 'bajo' && cur.status === 'confirmed' && !cur.prepay_requested_at && !cur.prepaid_at && !cur.prepay_error) {
-        try { await requestPrepay(cur); } catch (e) { console.error('[prepago]', e.message); }
+      const changed = cur.hist_status === 'bajo' && !db.db.prepare("SELECT 1 FROM events WHERE order_id = ? AND type IN ('history_low_flagged','prepay_requested')").get(o.id);
+      if (changed && cur.status === 'confirmed' && !cur.prepaid_at && !cur.prepay_error) {
+        try { await handleLowHistory(cur); } catch (e) { console.error('[historial]', e.message); }
       }
     }
   }

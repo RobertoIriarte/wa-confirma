@@ -60,7 +60,9 @@ export const config = {
   // Historial de la clienta (Dropi): mínimo % de pedidos entregados entre los finalizados
   history: {
     minRate: Number(env.HISTORY_MIN_RATE || 70),
-    // Si está bajo el mínimo, el agente pide pago por transferencia antes de despachar
+    // Qué hacer si está bajo el mínimo: 'review' = solo se marca para revisión interna (la clienta no se entera)
+    //                                     'prepay' = se le pide transferencia antes del despacho
+    lowAction: (env.HISTORY_LOW_ACTION || 'review').toLowerCase(),
     prepayInfo: (env.PREPAY_INFO || '').replace(/\\n/g, '\n'),
   },
 

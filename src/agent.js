@@ -45,13 +45,19 @@ async function sendSummary(waId, order, sender = 'bot') {
 }
 export const orderSummaryButtons = (waId, order) => sendSummary(waId, order, 'human');
 
+// Mensaje neutro: confirma la recepción sin prometer el despacho (antes del despacho se hace la revisión interna)
+const confirmedText = (order, who) =>
+  `¡Muchas gracias${who ? ', ' + who : ''}! 💗 Recibimos la confirmación de su pedido *${order.name}* ✅\nAhora lo preparamos para el despacho y le avisaremos cuando vaya en camino. Si necesita cambiar algo, escríbanos por este medio.`;
+
 async function confirm(waId, order, by) {
   if (order.status === 'confirmed') return wa.sendText(waId, `Su pedido ${order.name} ya estaba confirmado ✅ Le avisaremos cuando sea despachado.`, by);
   if (order.status === 'cancelled') return wa.sendText(waId, `Su pedido ${order.name} figura como cancelado. Si desea retomarlo, escríbanos y una persona del equipo le ayudará.`, by);
   if (by !== 'human' && await addressGate(waId, order, firstName(order.customer_name))) return;
   await applyStatus(order.id, 'confirmed', by);
-  if (needsPrepay(db.getOrder(order.id))) return requestPrepay(order, by);
-  return wa.sendText(waId, `¡Listo! Su pedido *${order.name}* quedó confirmado ✅\nLe avisaremos cuando sea despachado. ¡Muchas gracias por comprar en ${STORE()}! 💛`, by);
+  const after = db.getOrder(order.id);
+  if (needsPrepay(after)) return requestPrepay(order, by);
+  if (after.hist_status === 'bajo') await flagLowHistory(after);
+  return wa.sendText(waId, confirmedText(order, firstName(order.customer_name)), by);
 }
 
 async function cancel(waId, order, by, reason) {
@@ -98,7 +104,17 @@ export async function requestPrepay(order, by = 'bot') {
 }
 
 // Después de confirmar: si el historial es bajo, se pide transferencia en vez del mensaje de cierre
-const needsPrepay = (o) => o?.hist_status === 'bajo' && !o.prepaid_at;
+const needsPrepay = (o) => config.history.lowAction === 'prepay' && o?.hist_status === 'bajo' && !o.prepaid_at;
+
+// Historial bajo en modo revisión: no se le escribe a la clienta, solo se marca para el equipo
+export async function flagLowHistory(order) {
+  const o = db.getOrder(order.id);
+  if (!o?.wa_id || o.status === 'cancelled' || o.prepaid_at) return;
+  db.updateContact(o.wa_id, { needs_human: 1, human_reason: `Historial ${o.hist_rate != null ? `${o.hist_rate}% positivo` : 'bajo'} (mínimo ${config.history.minRate}%): decidir antes de despachar` });
+  db.logEvent(o.wa_id, o.id, 'history_low_flagged', o.hist_rate);
+  await flagForReview(o.id);
+}
+export const handleLowHistory = (order) => (config.history.lowAction === 'prepay' ? requestPrepay(order) : flagLowHistory(order));
 
 // ---------- validación de dirección ----------
 // Si Google Maps no encontró la dirección (o es dudosa), no se confirma: se pide la ubicación y se deriva.
@@ -161,8 +177,10 @@ async function confirmFromMessage(waId, order, parsed) {
   }
   if (await addressGate(waId, order, who)) return;
   await applyStatus(order.id, 'confirmed', 'bot');
-  if (needsPrepay(db.getOrder(order.id))) return requestPrepay(order, 'bot');
-  return wa.sendText(waId, `¡Gracias${who ? ' ' + who : ''}! 💗 Su pedido *${order.name}* quedó confirmado ✅\nLe avisaremos cuando sea despachado. Si necesita cambiar algo, escríbanos por este medio.`);
+  const after = db.getOrder(order.id);
+  if (needsPrepay(after)) return requestPrepay(order, 'bot');
+  if (after.hist_status === 'bajo') await flagLowHistory(after);
+  return wa.sendText(waId, confirmedText(order, who));
 }
 
 // ---------- búsqueda de pedido ----------

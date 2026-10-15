@@ -322,11 +322,14 @@ function addrLine(o) {
     ${o.addr?.formatted && o.addr_status !== 'ok' ? `<span class="addr-reasons">Google sugiere: ${esc(o.addr.formatted)}</span>` : ''}
     <span class="addr-links">${o.addr?.mapsUrl ? `<a href="${esc(o.addr.mapsUrl)}" target="_blank" rel="noopener">Ver en el mapa</a>` : ''}<button class="link-btn" data-recheck="${esc(o.id)}">Validar de nuevo</button></span>`;
 }
-const VERDICT = { prepago: ['revisar', 'Esperando pago por adelantado'], historial: ['esperando', 'Esperando la revisión de historial'], listo: ['listo', 'Listo para confirmar en Dropi'], revisar: ['revisar', 'Revisar antes de confirmar en Dropi'], esperando: ['esperando', 'Esperando que la clienta confirme'], no_despachar: ['no', 'No despachar: cancelar en Dropi'] };
+const VERDICT = { historial_bajo: ['revisar', 'Historial bajo: decidir si se despacha'], prepago: ['revisar', 'Esperando pago por adelantado'], historial: ['esperando', 'Esperando la revisión de historial'], listo: ['listo', 'Listo para confirmar en Dropi'], revisar: ['revisar', 'Revisar antes de confirmar en Dropi'], esperando: ['esperando', 'Esperando que la clienta confirme'], no_despachar: ['no', 'No despachar: cancelar en Dropi'] };
 function histLine(o) {
   const h = { ok: ['ok', `✓ ${o.hist_rate ?? ''}% positivo`], bajo: ['bad', `✕ ${o.hist_rate ?? '?'}% positivo`], sin_registro: ['', 'Sin registro (clienta nueva)'] }[o.hist_status] || ['', 'Aún sin revisar'];
   let extra = '';
-  if (o.hist_status === 'bajo') {
+  if (o.hist_status === 'bajo' && state.status?.historyAction !== 'prepay') {
+    extra = o.prepaid_at ? `<span class="addr-reasons">Aprobado para despacho ${ago(o.prepaid_at)}</span><span class="addr-links"><button class="link-btn" data-prepaid="${esc(o.id)}" data-val="0">Deshacer</button></span>`
+      : `<span class="addr-reasons">La clienta no fue avisada. Puede llamarla, despachar igual o cancelar el pedido.</span><span class="addr-links"><button class="link-btn" data-prepaid="${esc(o.id)}" data-val="1">Aprobar despacho igual</button></span>`;
+  } else if (o.hist_status === 'bajo') {
     extra = o.prepaid_at ? `<span class="addr-reasons">Pagó por adelantado ${ago(o.prepaid_at)}</span><span class="addr-links"><button class="link-btn" data-prepaid="${esc(o.id)}" data-val="0">Deshacer</button></span>`
       : `<span class="addr-reasons">${o.prepay_requested_at ? `Se pidió transferencia ${ago(o.prepay_requested_at)}` : esc(o.prepay_error || 'Falta pedir transferencia')}</span>
          <span class="addr-links"><button class="link-btn" data-prepaid="${esc(o.id)}" data-val="1">Marcar pago recibido</button>${!o.prepay_requested_at ? `<button class="link-btn" data-askpay="${esc(o.id)}">Pedir transferencia</button>` : ''}</span>`;
@@ -337,7 +340,7 @@ $('#orderPane').addEventListener('click', async (e) => {
   const p = e.target.closest('[data-prepaid]'), a = e.target.closest('[data-askpay]');
   if (!p && !a) return;
   try {
-    if (p) { await api(`/api/orders/${encodeURIComponent(p.dataset.prepaid)}/prepaid`, { method: 'POST', body: { paid: p.dataset.val === '1' } }); toast(p.dataset.val === '1' ? 'Pago registrado' : 'Pago desmarcado'); }
+    if (p) { await api(`/api/orders/${encodeURIComponent(p.dataset.prepaid)}/prepaid`, { method: 'POST', body: { paid: p.dataset.val === '1' } }); toast(p.dataset.val === '1' ? (state.status?.historyAction === 'prepay' ? 'Pago registrado' : 'Despacho aprobado') : 'Aprobación deshecha'); }
     if (a) { await api(`/api/orders/${encodeURIComponent(a.dataset.askpay)}/request-prepay`, { method: 'POST' }); toast('Se pidió la transferencia'); }
   } catch (err) { toast(err.message); }
   loadConv(); loadList();
