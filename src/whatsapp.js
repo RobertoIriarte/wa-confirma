@@ -52,7 +52,7 @@ export function sendButtons(to, text, buttons, sender = 'bot') {
     interactive: {
       type: 'button',
       body: { text },
-      action: { buttons: buttons.slice(0, 3).map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title.slice(0, 20) } })) },
+      action: { buttons: buttons.slice(0, 3).map((b) => ({ type: 'reply', reply: { id: b.id, title: [...b.title].slice(0, 20).join('') } })) },
     },
   };
   return sendAndLog(to, payload, { sender, body: text, kind: 'buttons', meta: { buttons: buttons.map((b) => b.title) } });

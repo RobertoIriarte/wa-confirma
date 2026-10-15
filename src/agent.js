@@ -37,7 +37,7 @@ function orderSummary(o, waId) {
 const confirmButtons = (o) => [
   { id: `confirm:${o.id}`, title: '✅ Confirmar' },
   { id: `cancel_ask:${o.id}`, title: '❌ Cancelar' },
-  { id: `human:${o.id}`, title: '💬 Hablar con alguien' },
+  { id: `human:${o.id}`, title: '💬 Hablar con equipo' },
 ];
 
 async function sendSummary(waId, order, sender = 'bot') {
@@ -195,6 +195,10 @@ async function locateOrder(waId, text) {
 }
 
 // ---------- intención rápida (sin gastar IA) ----------
+// Mensajes que son solo un saludo (no requieren IA)
+const GREETING = /^\s*(hola+|holi+|buen[oa]s?( (d[ií]as|tardes|noches))?|al[oó]|hey|saludos)[\s!.,👋🙂😊]*$/i;
+const hasQuestion = (t) => !GREETING.test(t) && (/[?¿]/.test(t) || String(t).trim().split(/\s+/).length >= 4);
+
 const YES = /^\s*(s[ií]+|sip|confirmo|confirmado|confirmar|si,? confirmo|ok|okay|dale|listo|de acuerdo|perfecto)[\s!.,👍✅🙌]*$/i;
 
 // ---------- punto de entrada ----------
@@ -259,6 +263,8 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId })
       try { order = await ensureAddressChecked(order); } catch (e) { console.error('[maps]', e.message); }
       if (AUTO_CONFIRM && parsed.isConfirmation) return confirmFromMessage(waId, order, parsed);
       if (order.status === 'cancelled') return aiOrFallback(waId, order);
+      // Si el primer mensaje trae una pregunta, la IA la responde y luego muestra el resumen con botones
+      if (aiReady() && hasQuestion(text) && !extractOrderNumber(text)) return aiOrFallback(waId, order);
       return sendSummary(waId, order);
     }
     if (order) return aiOrFallback(waId, order, found.notFound); // ya tenía otro pedido vinculado
@@ -310,6 +316,7 @@ Tu objetivo principal es que el cliente confirme o cancele su pedido. Reglas:
 - Nunca inventes plazos, precios, stock, políticas ni estados de envío. Si no está en la información de abajo, usa derivar_a_humano.
 - No puedes modificar pedidos (dirección, productos, cantidades, pagos): para eso usa derivar_a_humano.
 - Solo confirma o cancela cuando el cliente lo exprese claramente. Ante la duda, usa mostrar_resumen_con_botones.
+- Si el pedido está pendiente y la clienta hizo una pregunta, primero respóndela en tu texto y en la misma respuesta usa mostrar_resumen_con_botones para que confirme.
 - Si no hay pedido vinculado, pide el número de pedido (aparece en el correo de compra, ej. #1001) y usa buscar_pedido.
 - Las herramientas confirmar_pedido, cancelar_pedido, derivar_a_humano y mostrar_resumen_con_botones ya envían su propio mensaje: después de usarlas responde con texto vacío salvo que haga falta agregar algo distinto.
 - Si el cliente envía audio o imagen que no puedes ver, pídele amablemente que lo escriba.
@@ -419,6 +426,7 @@ async function runAI(waId, order, notFoundNumber) {
       return;
     }
 
+    if (text && text.length > 2) await wa.sendText(waId, text, 'ai');
     convo.push({ role: 'assistant', text, toolCalls });
     const results = [];
     for (const t of toolCalls) {

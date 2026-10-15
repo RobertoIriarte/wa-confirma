@@ -385,7 +385,7 @@ $('#messages').addEventListener('click', (e) => {
   if (!state.status?.demo) return;
   const span = e.target.closest('.msg-buttons span'); if (!span) return;
   const title = span.textContent;
-  const ids = { '✅ Confirmar': 'confirm', '❌ Cancelar': 'cancel_ask', '💬 Hablar con alguien': 'human', 'Sí, cancelar': 'cancel_yes', 'No, lo mantengo': 'keep' };
+  const ids = { '✅ Confirmar': 'confirm', '❌ Cancelar': 'cancel_ask', '💬 Hablar con equipo': 'human', 'Sí, cancelar': 'cancel_yes', 'No, lo mantengo': 'keep' };
   const o = state.detail?.orders?.[0];
   if (ids[title] && o) simulate({ from: state.current, text: title, buttonId: `${ids[title]}:${o.id}` });
 });
