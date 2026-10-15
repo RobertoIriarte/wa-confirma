@@ -281,3 +281,12 @@ server.listen(config.port, () => {
   if (!config.dashboard.password && !config.demo) console.warn('  ⚠️  Falta DASHBOARD_PASSWORD: el panel no se puede abrir.');
   reminders.startScheduler();
 });
+
+// Apagado limpio (Railway envía SIGTERM al reemplazar el servidor)
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    console.log(`Recibido ${sig}: cerrando…`);
+    server.close(() => { try { db.db.close(); } catch { /* ya cerrada */ } process.exit(0); });
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}
