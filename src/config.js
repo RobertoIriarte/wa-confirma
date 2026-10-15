@@ -63,6 +63,10 @@ export const config = {
     // Qué hacer si está bajo el mínimo: 'review' = solo se marca para revisión interna (la clienta no se entera)
     //                                     'prepay' = se le pide transferencia antes del despacho
     lowAction: (env.HISTORY_LOW_ACTION || 'review').toLowerCase(),
+    // Disparo inmediato de la revisión de historial (tarea programada de Claude con disparador por API)
+    fireUrl: env.HISTORY_ROUTINE_URL || '',
+    fireToken: env.HISTORY_ROUTINE_TOKEN || '',
+    fireMinGapSeconds: Number(env.HISTORY_FIRE_MIN_GAP || 120), // no disparar más de una vez cada 2 min (la tarea revisa todos los pendientes)
     prepayInfo: (env.PREPAY_INFO || '').replace(/\\n/g, '\n'),
   },
 

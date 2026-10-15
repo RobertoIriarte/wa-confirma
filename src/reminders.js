@@ -34,6 +34,39 @@ function inQuietHours() {
 
 export const remindersEnabled = () => Boolean(R.template && (whatsappReady() || config.demo));
 
+// ---------- revisión de historial al instante ----------
+let lastFire = 0;
+const firedFor = new Set(); // pedidos ya incluidos en un disparo
+export async function fireHistoryReview(orders, reason = 'pedido nuevo') {
+  const H = config.history;
+  if (!H.fireUrl || !H.fireToken) return { skipped: 'sin configurar' };
+  const pending = orders.filter((o) => !firedFor.has(o.id));
+  if (!pending.length) return { skipped: 'ya disparado' };
+  if (Date.now() - lastFire < H.fireMinGapSeconds * 1000) return { skipped: 'esperando intervalo' };
+  lastFire = Date.now();
+  pending.forEach((o) => firedFor.add(o.id));
+  try {
+    const res = await fetch(H.fireUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${H.fireToken}`, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: `Revisión inmediata (${reason}). Pedidos nuevos sin historial: ${pending.map((o) => o.name).join(', ')}. Revisa estos primero y luego cualquier otro pendiente.` }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      pending.forEach((o) => firedFor.delete(o.id));
+      console.error('[historial] disparo falló', res.status, data?.error?.message || '');
+      return { ok: false, status: res.status };
+    }
+    console.log('[historial] revisión disparada para', pending.map((o) => o.name).join(', '));
+    db.logEvent(null, null, 'history_fired', pending.map((o) => o.name).join(','));
+    return { ok: true };
+  } catch (e) {
+    pending.forEach((o) => firedFor.delete(o.id));
+    console.error('[historial] disparo falló', e.message);
+    return { ok: false };
+  }
+}
+
 export async function syncOrders() {
   if (!shopifyReady() && !config.demo) return { skipped: true };
   // Solo se recuerdan pedidos creados después de activar el sistema (nunca los antiguos)
@@ -53,6 +86,9 @@ export async function syncOrders() {
     }
   }
   db.setSetting('last_sync_at', new Date().toISOString());
+  // Pedidos recientes (últimas 6 h), abiertos y sin historial revisado → pedir revisión inmediata
+  const recent = list.filter((o) => !o.cancelled && !o.history?.status && Date.now() - new Date(o.createdAt) < 6 * 3600e3);
+  if (recent.length) await fireHistoryReview(recent);
   return { count: list.length };
 }
 
