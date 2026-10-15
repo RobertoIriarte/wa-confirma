@@ -310,7 +310,7 @@ function systemPrompt(order, notFoundNumber, waIdForPrompt) {
   const o = order;
   return `Eres el asistente de WhatsApp de la tienda online "${STORE()}" (Chile). Atiendes a clientes que escriben para confirmar su compra.
 
-Estilo: español de Chile, cercano y amable, tuteando. Mensajes cortos (1 a 3 frases), formato de WhatsApp (*negrita* con asteriscos, sin markdown de títulos). Emojis con moderación.
+Estilo: español de Chile, cercano y amable, tuteando. Mensajes cortos (1 a 2 frases), formato de WhatsApp (*negrita* con un solo asterisco, nunca **doble**). Máximo un emoji por mensaje. No termines tus respuestas preguntando si confirma: los botones ya lo preguntan.
 
 Tu objetivo principal es que el cliente confirme o cancele su pedido. Reglas:
 - Nunca inventes plazos, precios, stock, políticas ni estados de envío. Si no está en la información de abajo, usa derivar_a_humano.
@@ -419,14 +419,17 @@ async function runAI(waId, order, notFoundNumber) {
   let ended = false; // una herramienta ya respondió y cerró el turno
 
   for (let step = 0; step < 4; step++) {
-    const { text, toolCalls } = await callAI(systemPrompt(current, notFoundNumber, waId), convo);
+    const res = await callAI(systemPrompt(current, notFoundNumber, waId), convo);
+    const text = waFormat(res.text).trim();
+    const toolCalls = res.toolCalls;
 
     if (!toolCalls.length) {
       if (text && !(ended && text.length < 3)) await wa.sendText(waId, text, 'ai');
       return;
     }
 
-    const textSent = Boolean(text && text.length > 2);
+    const usesButtons = toolCalls.some((t) => t.name === 'mostrar_resumen_con_botones');
+    const textSent = Boolean(text && text.length > 2) && !usesButtons;
     if (textSent) await wa.sendText(waId, text, 'ai');
     console.log('[ia]', toolCalls.map((t) => t.name).join(', '), textSent ? '(con texto)' : '(sin texto)');
     convo.push({ role: 'assistant', text, toolCalls });
@@ -434,7 +437,7 @@ async function runAI(waId, order, notFoundNumber) {
     for (const t of toolCalls) {
       let out;
       try {
-        out = await runTool(t.name, t.input || {}, waId, current, { textSent });
+        out = await runTool(t.name, t.input || {}, waId, current, { textSent, text: usesButtons ? text : '' });
         if (out.order) current = out.order;
         if (out.ended) ended = true;
       } catch (e) { out = { result: `Error: ${e.message}` }; }
@@ -448,6 +451,10 @@ async function runAI(waId, order, notFoundNumber) {
   }
 }
 
+// Quita una pregunta final tipo "¿Confirmas tu pedido…?" para no repetirla junto a los botones
+const waFormat = (t) => String(t || '').replace(/\*\*(.+?)\*\*/g, '*$1*').replace(/^#+\s*/gm, '');
+const stripConfirmQuestion = (t) => t.replace(/\s*¿?\s*(confirmas|te confirmo|deseas confirmar|quieres confirmar)[^?]*\?\s*$/i, '').trim();
+
 async function runTool(name, input, waId, order, ctx = {}) {
   switch (name) {
     case 'buscar_pedido': {
@@ -459,14 +466,18 @@ async function runTool(name, input, waId, order, ctx = {}) {
     }
     case 'mostrar_resumen_con_botones': {
       if (!order) return { result: 'No hay pedido vinculado.' };
-      const answer = String(input.respuesta || '').trim();
-      if (answer && !ctx.textSent) await wa.sendText(waId, answer, 'ai');
-      // Si el resumen completo se mostró hace poco, solo se envían los botones con una línea
+      // La respuesta y los botones van en UN solo mensaje
+      const answer = stripConfirmQuestion(waFormat(input.respuesta || ctx.text || '').trim());
       const recent = db.getMessages(waId, 12).some((m) => m.direction === 'out' && m.kind === 'buttons' && /Este es tu pedido|Encontré el pedido/.test(m.body || '')
         && Date.now() - new Date(m.created_at) < 6 * 3600e3);
-      if (recent && order.status === 'pending') await wa.sendButtons(waId, `¿Confirmas tu pedido *${order.name}* para despacharlo?`, confirmButtons(order), 'ai');
-      else await sendSummary(waId, order, 'ai');
-      return { ended: true, result: 'Botones enviados.' };
+      if (recent && order.status === 'pending') {
+        const body = `${answer ? `${answer}\n\n` : ''}¿Confirmas tu pedido *${order.name}* para despacharlo?`;
+        await wa.sendButtons(waId, body.slice(0, 1000), confirmButtons(order), 'ai');
+      } else {
+        if (answer) await wa.sendText(waId, answer, 'ai');
+        await sendSummary(waId, order, 'ai');
+      }
+      return { ended: true, result: 'Respuesta y botones enviados.' };
     }
     case 'confirmar_pedido':
       if (!order) return { result: 'No hay pedido vinculado.' };
