@@ -16,21 +16,21 @@ export const verified = (o, waId) => shopify.samePhone(o?.phone, waId);
 function orderSummary(o, waId) {
   if (!verified(o, waId)) {
     return [
-      `¡Hola! 👋 Encontré el pedido *${o.name}* en ${STORE()}${o.total ? ` por ${money(o.total, o.currency)}` : ''}.`,
-      'Por seguridad no mostramos los datos de despacho porque este WhatsApp no es el teléfono registrado en la compra.',
+      `¡Hola! 👋 Encontramos el pedido *${o.name}* en ${STORE()}${o.total ? ` por ${money(o.total, o.currency)}` : ''}.`,
+      'Por seguridad no mostramos los datos de despacho, ya que este WhatsApp no es el teléfono registrado en la compra.',
       '',
-      '¿Confirmas el pedido?',
+      '¿Nos confirma el pedido?',
     ].join('\n');
   }
   const lines = [
-    `¡Hola${firstName(o.customer_name) ? ' ' + firstName(o.customer_name) : ''}! 👋 Gracias por tu compra en ${STORE()}.`,
+    `¡Hola${firstName(o.customer_name) ? ' ' + firstName(o.customer_name) : ''}! 👋 Muchas gracias por su compra en ${STORE()}.`,
     '',
-    `Este es tu pedido *${o.name}*:`,
+    `Este es su pedido *${o.name}*:`,
     o.items ? `🛍️ ${o.items}` : null,
     o.address ? `📍 ${o.address}` : null,
     o.total ? `💰 Total: ${money(o.total, o.currency)}` : null,
     '',
-    '¿Confirmas el pedido para despacharlo?',
+    '¿Nos confirma el pedido para despacharlo?',
   ];
   return lines.filter((l) => l !== null).join('\n');
 }
@@ -46,26 +46,26 @@ async function sendSummary(waId, order, sender = 'bot') {
 export const orderSummaryButtons = (waId, order) => sendSummary(waId, order, 'human');
 
 async function confirm(waId, order, by) {
-  if (order.status === 'confirmed') return wa.sendText(waId, `Tu pedido ${order.name} ya estaba confirmado ✅ Te avisaremos cuando sea despachado.`, by);
-  if (order.status === 'cancelled') return wa.sendText(waId, `Tu pedido ${order.name} figura como cancelado. Si quieres retomarlo, escríbenos y una persona del equipo te ayuda.`, by);
+  if (order.status === 'confirmed') return wa.sendText(waId, `Su pedido ${order.name} ya estaba confirmado ✅ Le avisaremos cuando sea despachado.`, by);
+  if (order.status === 'cancelled') return wa.sendText(waId, `Su pedido ${order.name} figura como cancelado. Si desea retomarlo, escríbanos y una persona del equipo le ayudará.`, by);
   if (by !== 'human' && await addressGate(waId, order, firstName(order.customer_name))) return;
   await applyStatus(order.id, 'confirmed', by);
   if (needsPrepay(db.getOrder(order.id))) return requestPrepay(order, by);
-  return wa.sendText(waId, `¡Listo! Tu pedido *${order.name}* quedó confirmado ✅\nTe avisaremos cuando sea despachado. ¡Gracias por comprar en ${STORE()}! 💛`, by);
+  return wa.sendText(waId, `¡Listo! Su pedido *${order.name}* quedó confirmado ✅\nLe avisaremos cuando sea despachado. ¡Muchas gracias por comprar en ${STORE()}! 💛`, by);
 }
 
 async function cancel(waId, order, by, reason) {
-  if (order.status === 'cancelled') return wa.sendText(waId, `Tu pedido ${order.name} ya estaba cancelado.`, by);
+  if (order.status === 'cancelled') return wa.sendText(waId, `Su pedido ${order.name} ya estaba cancelado.`, by);
   if (!verified(order, waId)) return handoff(waId, order, `Pide cancelar ${order.name} desde un número distinto al del pedido`, by);
   await applyStatus(order.id, 'cancelled', by, { note: reason ? `Cliente (WhatsApp): ${reason}` : undefined });
-  return wa.sendText(waId, `Tu pedido *${order.name}* fue cancelado. Si fue un error o quieres cambiar algo, escríbenos y te ayudamos 🙌`, by);
+  return wa.sendText(waId, `Su pedido *${order.name}* fue cancelado. Si fue un error o desea cambiar algo, escríbanos y con gusto le ayudamos 🙌`, by);
 }
 
 async function handoff(waId, order, reason, by = 'bot', text) {
   db.updateContact(waId, { needs_human: 1, bot_paused: 1, human_reason: reason || 'El cliente pidió hablar con una persona' });
   db.logEvent(waId, order?.id, 'handoff', reason);
   if (order) await flagForReview(order.id);
-  return wa.sendText(waId, text || 'Te comunico con una persona de nuestro equipo 🙋‍♀️ Te responderemos lo antes posible.', by);
+  return wa.sendText(waId, text || 'Le comunico con una persona de nuestro equipo 🙋‍♀️ Le responderemos a la brevedad.', by);
 }
 
 // ---------- historial bajo: pago por adelantado ----------
@@ -84,11 +84,11 @@ export async function requestPrepay(order, by = 'bot') {
   }
   const who = firstName(o.customer_name);
   const text = [
-    `Hola${who ? ' ' + who : ''} 💗 Para despachar tu pedido *${o.name}*${o.total ? ` (${money(o.total, o.currency)})` : ''} necesitamos que esta vez el pago sea por transferencia antes del envío.`,
+    `Hola${who ? ' ' + who : ''} 💗 Para despachar su pedido *${o.name}*${o.total ? ` (${money(o.total, o.currency)})` : ''} necesitamos que esta vez el pago sea por transferencia antes del envío.`,
     '',
-    config.history.prepayInfo || 'En un momento te enviamos los datos para transferir.',
+    config.history.prepayInfo || 'En un momento le enviamos los datos para transferir.',
     '',
-    'Cuando transfieras, envíanos el comprobante por aquí y te confirmamos el despacho 🙌',
+    'Cuando realice la transferencia, por favor envíenos el comprobante por este medio y le confirmamos el despacho 🙌',
   ].join('\n');
   const r = await wa.sendText(o.wa_id, text, by);
   db.updateOrder(o.id, r.ok ? { prepay_requested_at: db.now(), prepay_error: null } : { prepay_error: r.error });
@@ -110,7 +110,7 @@ async function addressGate(waId, order, who) {
   const d = addressDetail(o);
   const where = [o.street, o.city].filter(Boolean).join(', ') || o.address;
   await handoff(waId, o, `Dirección ${o.addr_status === 'dudosa' ? 'dudosa' : 'no encontrada'} en Google Maps: ${(d.reasons || []).join('; ')}`, 'bot',
-    `¡Gracias${who ? ' ' + who : ''}! 💗 Antes de confirmar tu pedido *${o.name}* queremos asegurarnos de que llegue sin problemas: no logramos ubicar en el mapa la dirección *${where}*.\n\n¿Nos envías tu ubicación 📍 (📎 › Ubicación) o la dirección completa con calle, número y comuna? Una persona del equipo la revisará y confirmará tu pedido.`);
+    `¡Gracias${who ? ' ' + who : ''}! 💗 Antes de confirmar su pedido *${o.name}* queremos asegurarnos de que llegue sin problemas: no logramos ubicar en el mapa la dirección *${where}*.\n\n¿Podría enviarnos su ubicación 📍 (📎 › Ubicación) o la dirección completa con calle, número y comuna? Una persona del equipo la revisará y confirmará su pedido.`);
   return true;
 }
 
@@ -151,18 +151,18 @@ export function messageDifferences(parsed, order) {
 
 async function confirmFromMessage(waId, order, parsed) {
   const who = parsed.name || firstName(order.customer_name);
-  if (order.status === 'confirmed') return wa.sendText(waId, `¡Hola${who ? ' ' + who : ''}! Tu pedido *${order.name}* ya estaba confirmado ✅ Te avisaremos cuando sea despachado.`);
+  if (order.status === 'confirmed') return wa.sendText(waId, `¡Hola${who ? ' ' + who : ''}! Su pedido *${order.name}* ya estaba confirmado ✅ Le avisaremos cuando sea despachado.`);
   if (order.status === 'cancelled') return handoff(waId, order, `Quiere confirmar ${order.name}, que figura cancelado`, 'bot',
-    `¡Hola${who ? ' ' + who : ''}! Tu pedido *${order.name}* figura como cancelado. Una persona del equipo te escribirá para revisarlo 🙌`);
+    `¡Hola${who ? ' ' + who : ''}! Su pedido *${order.name}* figura como cancelado. Una persona del equipo le escribirá para revisarlo 🙌`);
   const diffs = messageDifferences(parsed, order);
   if (diffs.length) {
     return handoff(waId, order, `El mensaje de confirmación no coincide con Shopify: ${diffs.join('; ')}`, 'bot',
-      `¡Gracias${who ? ' ' + who : ''}! 💗 Recibimos tu pedido *${order.name}*. Vimos que los datos de tu mensaje no coinciden con los del pedido, así que una persona del equipo los revisará contigo antes de despacharlo 🙌`);
+      `¡Gracias${who ? ' ' + who : ''}! 💗 Recibimos su pedido *${order.name}*. Notamos que los datos de su mensaje no coinciden con los del pedido, así que una persona del equipo los revisará con usted antes de despacharlo 🙌`);
   }
   if (await addressGate(waId, order, who)) return;
   await applyStatus(order.id, 'confirmed', 'bot');
   if (needsPrepay(db.getOrder(order.id))) return requestPrepay(order, 'bot');
-  return wa.sendText(waId, `¡Gracias${who ? ' ' + who : ''}! 💗 Tu pedido *${order.name}* quedó confirmado ✅\nTe avisaremos cuando sea despachado. Si necesitas cambiar algo, escríbenos por aquí.`);
+  return wa.sendText(waId, `¡Gracias${who ? ' ' + who : ''}! 💗 Su pedido *${order.name}* quedó confirmado ✅\nLe avisaremos cuando sea despachado. Si necesita cambiar algo, escríbanos por este medio.`);
 }
 
 // ---------- búsqueda de pedido ----------
@@ -231,8 +231,8 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId })
     if (target) {
       if (action === 'confirm') return confirm(waId, target, 'bot');
       if (action === 'cancel_ask') {
-        if (target.status === 'cancelled') return wa.sendText(waId, `Tu pedido ${target.name} ya estaba cancelado.`);
-        return wa.sendButtons(waId, `¿Seguro que quieres cancelar el pedido ${target.name}?`, [
+        if (target.status === 'cancelled') return wa.sendText(waId, `Su pedido ${target.name} ya estaba cancelado.`);
+        return wa.sendButtons(waId, `¿Está seguro/a de que desea cancelar el pedido ${target.name}?`, [
           { id: `cancel_yes:${target.id}`, title: 'Sí, cancelar' },
           { id: `keep:${target.id}`, title: 'No, lo mantengo' },
         ]);
@@ -255,7 +255,7 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId })
     }
     if (lookupError && (extractOrderNumber(text) || parsed.isConfirmation)) {
       db.logEvent(waId, null, 'shopify_error', lookupError);
-      return handoff(waId, null, lookupError, 'bot', '¡Gracias por escribirnos! 💗 Recibimos tu mensaje. Una persona del equipo revisará tu pedido y te responderá por aquí a la brevedad 🙌');
+      return handoff(waId, null, lookupError, 'bot', '¡Gracias por escribirnos! 💗 Recibimos su mensaje. Una persona del equipo revisará su pedido y le responderá por este medio a la brevedad 🙌');
     }
     if (found.order) {
       order = db.linkOrder(found.order, waId, verified(found.order, waId));
@@ -269,7 +269,7 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId })
     }
     if (order) return aiOrFallback(waId, order, found.notFound); // ya tenía otro pedido vinculado
     if (found.notFound && !aiReady()) {
-      return wa.sendText(waId, `No encontré el pedido #${found.notFound} 🤔 ¿Puedes revisar el número en el correo de confirmación? Si prefieres, escribe "ayuda" y te atiende una persona.`);
+      return wa.sendText(waId, `No encontramos el pedido #${found.notFound} 🤔 ¿Podría revisar el número en el correo de confirmación? Si prefiere, escriba "ayuda" y le atenderá una persona.`);
     }
     return aiOrFallback(waId, null, found.notFound);
   }
@@ -290,7 +290,7 @@ async function aiOrFallback(waId, order, notFoundNumber) {
   // Sin IA (o si falló)
   if (!order) {
     if (/ayuda|humano|persona|ejecutiv/i.test(lastInboundText(waId))) return handoff(waId, null, 'Pidió ayuda sin número de pedido');
-    return wa.sendText(waId, `¡Hola! 👋 Soy el asistente de ${STORE()}. Para ayudarte, envíame tu número de pedido (por ejemplo: #1001). Lo encuentras en el correo de confirmación de compra.`);
+    return wa.sendText(waId, `¡Hola! 👋 Le saluda el asistente de ${STORE()}. Para ayudarle, ¿podría enviarnos su número de pedido (por ejemplo: #1001)? Lo encuentra en el correo de confirmación de compra.`);
   }
   if (order.status === 'pending') return sendSummary(waId, order);
   return handoff(waId, order, 'Mensaje que el bot no sabe responder');
@@ -310,7 +310,7 @@ function systemPrompt(order, notFoundNumber, waIdForPrompt) {
   const o = order;
   return `Eres el asistente de WhatsApp de la tienda online "${STORE()}" (Chile). Atiendes a clientes que escriben para confirmar su compra.
 
-Estilo: español de Chile, cercano y amable, tuteando. Mensajes cortos (1 a 2 frases), formato de WhatsApp (*negrita* con un solo asterisco, nunca **doble**). Máximo un emoji por mensaje. No termines tus respuestas preguntando si confirma: los botones ya lo preguntan.
+Estilo: español de Chile, formal y cercano. Trata SIEMPRE de "usted" a la clienta o cliente (nunca tutees: "su pedido", "le ayudamos", "¿podría…?"). Amable y cálido, sin ser rígido. Mensajes cortos (1 a 2 frases), formato de WhatsApp (*negrita* con un solo asterisco, nunca **doble**). Máximo un emoji por mensaje. No termines tus respuestas preguntando si confirma: los botones ya lo preguntan.
 
 Tu objetivo principal es que el cliente confirme o cancele su pedido. Reglas:
 - Nunca inventes plazos, precios, stock, políticas ni estados de envío. Si no está en la información de abajo, usa derivar_a_humano.
@@ -453,7 +453,7 @@ async function runAI(waId, order, notFoundNumber) {
 
 // Quita una pregunta final tipo "¿Confirmas tu pedido…?" para no repetirla junto a los botones
 const waFormat = (t) => String(t || '').replace(/\*\*(.+?)\*\*/g, '*$1*').replace(/^#+\s*/gm, '');
-const stripConfirmQuestion = (t) => t.replace(/\s*¿?\s*(confirmas|te confirmo|deseas confirmar|quieres confirmar)[^?]*\?\s*$/i, '').trim();
+const stripConfirmQuestion = (t) => t.replace(/\s*¿?\s*(confirmas|nos confirma|me confirma|le confirmo|te confirmo|desea confirmar|deseas confirmar|quiere confirmar|quieres confirmar)[^?]*\?\s*$/i, '').trim();
 
 async function runTool(name, input, waId, order, ctx = {}) {
   switch (name) {
@@ -468,10 +468,10 @@ async function runTool(name, input, waId, order, ctx = {}) {
       if (!order) return { result: 'No hay pedido vinculado.' };
       // La respuesta y los botones van en UN solo mensaje
       const answer = stripConfirmQuestion(waFormat(input.respuesta || ctx.text || '').trim());
-      const recent = db.getMessages(waId, 12).some((m) => m.direction === 'out' && m.kind === 'buttons' && /Este es tu pedido|Encontré el pedido/.test(m.body || '')
+      const recent = db.getMessages(waId, 12).some((m) => m.direction === 'out' && m.kind === 'buttons' && /Este es (tu|su) pedido|Encontr(é|amos) el pedido/.test(m.body || '')
         && Date.now() - new Date(m.created_at) < 6 * 3600e3);
       if (recent && order.status === 'pending') {
-        const body = `${answer ? `${answer}\n\n` : ''}¿Confirmas tu pedido *${order.name}* para despacharlo?`;
+        const body = `${answer ? `${answer}\n\n` : ''}¿Nos confirma su pedido *${order.name}* para despacharlo?`;
         await wa.sendButtons(waId, body.slice(0, 1000), confirmButtons(order), 'ai');
       } else {
         if (answer) await wa.sendText(waId, answer, 'ai');

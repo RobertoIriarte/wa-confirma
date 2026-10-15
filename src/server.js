@@ -235,8 +235,8 @@ async function api(req, res, url) {
     if (!['confirmed', 'cancelled', 'pending'].includes(status)) return send(res, 400, { error: 'Estado inválido' });
     const r = await applyStatus(id, status, 'human', { cancelInShopify: Boolean(cancelInShopify), note: 'Cancelado desde el panel de WhatsApp' });
     if (notify && r.order?.wa_id) {
-      const msg = status === 'confirmed' ? `¡Listo! Tu pedido *${r.order.name}* quedó confirmado ✅ Te avisaremos cuando sea despachado.`
-        : status === 'cancelled' ? `Tu pedido *${r.order.name}* fue cancelado. Si necesitas algo más, escríbenos 🙌` : null;
+      const msg = status === 'confirmed' ? `¡Listo! Su pedido *${r.order.name}* quedó confirmado ✅ Le avisaremos cuando sea despachado.`
+        : status === 'cancelled' ? `Su pedido *${r.order.name}* fue cancelado. Si necesita algo más, escríbanos 🙌` : null;
       if (msg) await wa.sendText(r.order.wa_id, msg, 'human');
     }
     return send(res, 200, r);
