@@ -12,6 +12,7 @@ import { handleInbound, orderSummaryButtons, requestPrepay } from './agent.js';
 import { applyStatus, clearReview, flagForReview } from './orders.js';
 import * as reminders from './reminders.js';
 import { mediaPath } from './media.js';
+import { sendShippingNotice } from './shipping.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
 
 // Veredicto para confirmar en Dropi, con sus razones
@@ -38,7 +39,8 @@ function dropiVerdict(o, waId, allOrders) {
   const others = allOrders.filter((x) => x.id !== o.id && x.status !== 'cancelled' && new Date(x.linked_at) > week);
   if (others.length) add(false, `Tiene otro${others.length > 1 ? 's' : ''} ${others.length} pedido${others.length > 1 ? 's' : ''} abierto${others.length > 1 ? 's' : ''} esta semana (${others.map((x) => x.name).join(', ')})`);
   let verdict;
-  if (o.status === 'cancelled') verdict = 'no_despachar';
+  if (o.ship_status && o.status !== 'cancelled') verdict = o.ship_status === 'novedad' ? 'envio_novedad' : o.ship_status === 'devuelto' ? 'envio_devuelto' : o.ship_status === 'entregado' ? 'envio_entregado' : 'envio_curso';
+  else if (o.status === 'cancelled') verdict = 'no_despachar';
   else if (config.history.lowAction === 'prepay' && o.hist_status === 'bajo' && !o.prepaid_at && checks.filter((c) => c.ok === false).length === 1) verdict = 'prepago';
   else if (o.hist_status === 'bajo' && !o.prepaid_at && checks.filter((c) => c.ok === false).length === 1) verdict = 'historial_bajo';
   else if (checks.some((c) => c.ok === false)) verdict = 'revisar';
@@ -240,6 +242,14 @@ async function api(req, res, url) {
     db.updateOrder(id, { prepay_requested_at: null, prepay_error: null });
     const r = await requestPrepay(db.getOrder(id), 'human');
     return send(res, r.ok === false ? 400 : 200, r.ok === false ? { error: db.getOrder(id).prepay_error || r.error || 'No se pudo enviar' } : { ok: true });
+  }
+
+  m = p.match(/^\/api\/orders\/(.+)\/ship-notice$/);
+  if (m && req.method === 'POST') {
+    const o = db.getOrder(decodeURIComponent(m[1]));
+    if (!o) return send(res, 404, { error: 'Pedido no encontrado' });
+    const r = await sendShippingNotice(o, { manual: true });
+    return send(res, r.ok ? 200 : 400, r.ok ? { ok: true } : { error: r.error });
   }
 
   m = p.match(/^\/api\/orders\/(.+)\/check-address$/);

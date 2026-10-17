@@ -177,7 +177,7 @@ async function loadList() {
       <span class="conv-last">${c.last_sender && c.last_sender !== 'customer' ? `${SENDER[c.last_sender] || ''}: ` : ''}${esc(c.last_body || '')}</span>
       <span class="conv-meta">
         ${c.bot_paused && !c.needs_human ? '<span class="badge paused">Bot pausado</span>' : ''}
-        ${badge(c.order_status)}
+        ${c.order_ship ? `<span class="badge ship-${c.order_ship}">${(SHIP[c.order_ship] || ['', ''])[1].replace(/^[✓✕] /, '')}</span>` : badge(c.order_status)}
         ${c.unread ? `<span class="unread" aria-label="${c.unread} sin leer">${c.unread}</span>` : ''}
       </span>
     </li>`).join('') + (state.status?.demo ? '<li class="list-empty"><button class="btn" id="openSim">Simular otro cliente</button></li>' : '');
@@ -293,6 +293,7 @@ function renderOrder(d, prevStatus) {
         <div><dt>Cliente</dt><dd>${esc(o.customer_name || '—')}</dd></div>
         <div><dt>Productos</dt><dd>${esc(o.items || '—')}</dd></div>
         <div><dt>Despacho</dt><dd>${esc(o.address || '—')}${addrLine(o)}</dd></div>
+        ${o.ship_status ? `<div><dt>Envío</dt><dd>${shipLine(o)}</dd></div>` : ''}
         <div><dt>Historial en Dropi</dt><dd>${histLine(o)}</dd></div>
         <div><dt>Teléfono del pedido</dt><dd>${esc(o.phone || '—')}</dd></div>
       </dl>
@@ -323,7 +324,24 @@ function addrLine(o) {
     ${o.addr?.formatted && o.addr_status !== 'ok' ? `<span class="addr-reasons">Google sugiere: ${esc(o.addr.formatted)}</span>` : ''}
     <span class="addr-links">${o.addr?.mapsUrl ? `<a href="${esc(o.addr.mapsUrl)}" target="_blank" rel="noopener">Ver en el mapa</a>` : ''}<button class="link-btn" data-recheck="${esc(o.id)}">Validar de nuevo</button></span>`;
 }
-const VERDICT = { historial_bajo: ['revisar', 'Historial bajo: decidir si se despacha'], prepago: ['revisar', 'Esperando pago por adelantado'], historial: ['esperando', 'Esperando la revisión de historial'], listo: ['listo', 'Listo para confirmar en Dropi'], revisar: ['revisar', 'Revisar antes de confirmar en Dropi'], esperando: ['esperando', 'Esperando que la clienta confirme'], no_despachar: ['no', 'No despachar: cancelar en Dropi'] };
+const VERDICT = { envio_curso: ['listo', 'Despachado: en camino'], envio_entregado: ['listo', 'Entregado a la clienta'], envio_novedad: ['revisar', 'Novedad en la entrega: coordinar con la clienta'], envio_devuelto: ['no', 'Pedido devuelto'], historial_bajo: ['revisar', 'Historial bajo: decidir si se despacha'], prepago: ['revisar', 'Esperando pago por adelantado'], historial: ['esperando', 'Esperando la revisión de historial'], listo: ['listo', 'Listo para confirmar en Dropi'], revisar: ['revisar', 'Revisar antes de confirmar en Dropi'], esperando: ['esperando', 'Esperando que la clienta confirme'], no_despachar: ['no', 'No despachar: cancelar en Dropi'] };
+const SHIP = { preparado: ['', 'Preparando despacho'], en_transito: ['warn', 'En tránsito'], en_reparto: ['warn', 'En reparto'], novedad: ['bad', 'Novedad en la entrega'], entregado: ['ok', '✓ Entregado'], devuelto: ['bad', '✕ Devuelto'] };
+const NOTICE_STATES = ['en_transito', 'en_reparto', 'novedad', 'entregado'];
+function shipLine(o) {
+  const [cls, label] = SHIP[o.ship_status] || ['', o.ship_status];
+  const detail = [o.ship_raw, o.ship_carrier, o.ship_tracking ? `seguimiento ${o.ship_tracking}` : ''].filter(Boolean).join(' · ');
+  let notice = '';
+  if (o.ship_notified === o.ship_status && o.ship_notified_at) notice = `Clienta avisada ${ago(o.ship_notified_at)}`;
+  else if (o.ship_notified === o.ship_status && o.ship_notify_error) notice = `No se avisó: ${esc(o.ship_notify_error)}`;
+  const btn = NOTICE_STATES.includes(o.ship_status) && !(o.ship_notified === o.ship_status && o.ship_notified_at) ? `<span class="addr-links"><button class="link-btn" data-shipnotice="${esc(o.id)}">Avisar a la clienta</button></span>` : '';
+  return `<span class="addr-check ${cls}">${label}</span>${detail ? `<span class="addr-reasons">${esc(detail)}${o.ship_updated_at ? `, ${ago(o.ship_updated_at)}` : ''}</span>` : ''}${notice ? `<span class="addr-reasons">${notice}</span>` : ''}${btn}`;
+}
+$('#orderPane').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-shipnotice]'); if (!b) return;
+  try { await api(`/api/orders/${encodeURIComponent(b.dataset.shipnotice)}/ship-notice`, { method: 'POST' }); toast('Aviso enviado'); }
+  catch (err) { toast(err.message); }
+  loadConv(); loadList();
+});
 function histLine(o) {
   const h = { ok: ['ok', `✓ ${o.hist_rate ?? ''}% positivo`], bajo: ['bad', `✕ ${o.hist_rate ?? '?'}% positivo`], sin_registro: ['', 'Sin registro (clienta nueva)'] }[o.hist_status] || ['', 'Aún sin revisar'];
   let extra = '';

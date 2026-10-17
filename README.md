@@ -150,3 +150,13 @@ scripts/seed-demo.js  datos de ejemplo
 ## Audios
 
 Cuando una clienta envía una nota de voz, el sistema la descarga, la transcribe con OpenAI (`OPENAI_TRANSCRIBE_MODEL`, por defecto `whisper-1`) y el agente responde como si la hubiera escrito. En el panel se puede escuchar el audio y leer la transcripción. Si no se puede transcribir, se le pide amablemente que escriba su consulta. Los audios quedan guardados en `DATA_DIR/media`.
+
+## Seguimiento del envío
+
+La tarea programada "Estado de envío Dropi → Shopify" escribe en cada pedido una etiqueta `ENVIO-*` y una línea `Envío Dropi: ...` en la nota. El servidor la lee en cada sincronización (cada 2 min) y:
+
+- Muestra el estado, la transportista y el N° de seguimiento en el panel (filtros **En camino** y **Novedad de envío**). Los pedidos ya despachados salen de "Listos para Dropi".
+- Le avisa a la clienta cuando el pedido va **en tránsito**, **en reparto** o tiene una **novedad** (configurable con `SHIP_NOTIFY`). Fuera del horario silencioso (`REMINDER_QUIET_HOURS`) y solo una vez por estado.
+- Si pasaron más de 24 h desde el último mensaje de la clienta, el aviso necesita una plantilla aprobada en Meta (`SHIP_TEMPLATE_*`). Sin plantilla queda anotado en el panel, con un botón para reintentar.
+- Con una novedad o devolución, la conversación pasa a "Requieren atención".
+- El agente usa el estado y el N° de seguimiento para responder "¿dónde está mi pedido?".

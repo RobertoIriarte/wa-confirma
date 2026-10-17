@@ -389,3 +389,7 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 
 .msg-audio { display: block; width: 240px; max-width: 100%; height: 36px; margin-bottom: 6px; }
 .msg-note { display: block; font-size: 11px; color: var(--ink-3); margin: -2px 0 4px; white-space: normal; }
+.badge.ship-preparado { background: var(--bg); color: var(--ink-2); }
+.badge.ship-en_transito, .badge.ship-en_reparto { background: var(--pending-soft); color: var(--pending); }
+.badge.ship-entregado { background: var(--confirm-soft); color: var(--confirm); }
+.badge.ship-novedad, .badge.ship-devuelto { background: var(--cancel-soft); color: var(--cancel); }

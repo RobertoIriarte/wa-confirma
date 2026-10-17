@@ -1,6 +1,7 @@
 // Acceso a pedidos de Shopify (Admin GraphQL API)
 import { config, shopifyReady } from './config.js';
 import { parseHistory } from './history.js';
+import { parseShipping } from './shipping.js';
 
 let cachedToken = null; // { token, expiresAt }
 
@@ -65,6 +66,7 @@ function mapOrder(n) {
     gateways: n.paymentGatewayNames || [],
     note: n.note || '',
     history: parseHistory(n.tags, n.note),
+    shipping: parseShipping(n.tags, n.note),
   };
 }
 

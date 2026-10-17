@@ -82,6 +82,9 @@ for (const [table, col, type] of [
   ['orders', 'prepay_requested_at', 'TEXT'],
   ['orders', 'prepay_error', 'TEXT'],
   ['orders', 'prepaid_at', 'TEXT'],
+  ['orders', 'ship_status', 'TEXT'],   // preparado | en_transito | en_reparto | novedad | entregado | devuelto
+  ['orders', 'ship_raw', 'TEXT'], ['orders', 'ship_carrier', 'TEXT'], ['orders', 'ship_tracking', 'TEXT'], ['orders', 'ship_updated_at', 'TEXT'],
+  ['orders', 'ship_notified', 'TEXT'], ['orders', 'ship_notified_at', 'TEXT'], ['orders', 'ship_notify_error', 'TEXT'],
 ]) {
   try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch { /* ya existe */ }
 }
@@ -150,6 +153,11 @@ export function linkOrder(o, waId, force = false) {
       addr_status = CASE WHEN excluded.address IS NOT orders.address THEN NULL ELSE orders.addr_status END`)
     .run(o.id, o.name, waId, o.customerName, o.phone, o.total, o.currency, o.items, o.address, o.street ?? null, o.city ?? null, o.province ?? null, o.createdAt, t, o.cancelled ? 'cancelled' : 'pending');
   if (o.history?.status) updateOrderHistory(o.id, o.history);
+  if (o.shipping?.status) {
+    const sh = o.shipping;
+    db.prepare('UPDATE orders SET ship_status = ?, ship_raw = ?, ship_carrier = ?, ship_tracking = ?, ship_updated_at = COALESCE(?, ship_updated_at, ?) WHERE id = ?')
+      .run(sh.status, sh.raw ?? null, sh.carrier ?? null, sh.tracking ?? null, sh.updatedAt ?? null, now(), o.id);
+  }
   logEvent(waId, o.id, 'order_linked', o.name);
   return getOrder(o.id);
 }
@@ -230,7 +238,7 @@ export function listConversations({ filter = 'all', q = '' } = {}) {
     SELECT c.*,
       (SELECT body FROM messages m WHERE m.wa_id = c.wa_id ORDER BY id DESC LIMIT 1) AS last_body,
       (SELECT sender FROM messages m WHERE m.wa_id = c.wa_id ORDER BY id DESC LIMIT 1) AS last_sender,
-      o.id AS order_id, o.name AS order_name, o.status AS order_status, o.addr_status AS order_addr, o.hist_status AS order_hist, o.prepaid_at AS order_prepaid, o.total AS order_total, o.currency AS order_currency
+      o.id AS order_id, o.name AS order_name, o.status AS order_status, o.addr_status AS order_addr, o.hist_status AS order_hist, o.prepaid_at AS order_prepaid, o.ship_status AS order_ship, o.total AS order_total, o.currency AS order_currency
     FROM contacts c
     LEFT JOIN orders o ON o.id = (
       SELECT id FROM orders WHERE wa_id = c.wa_id
@@ -242,7 +250,9 @@ export function listConversations({ filter = 'all', q = '' } = {}) {
     if (filter === 'human' && !r.needs_human && !r.bot_paused) return false;
     if (['pending', 'confirmed', 'cancelled'].includes(filter) && r.order_status !== filter) return false;
     if (filter === 'no_order' && r.order_id) return false;
-    if (filter === 'ready' && !(r.order_status === 'confirmed' && !r.needs_human && !['dudosa', 'no_encontrada'].includes(r.order_addr)
+    if (filter === 'shipping' && !['preparado', 'en_transito', 'en_reparto'].includes(r.order_ship)) return false;
+    if (filter === 'ship_issue' && !['novedad', 'devuelto'].includes(r.order_ship)) return false;
+    if (filter === 'ready' && !(r.order_status === 'confirmed' && !r.order_ship && !r.needs_human && !['dudosa', 'no_encontrada'].includes(r.order_addr)
       && (r.order_hist === 'ok' || r.order_hist === 'sin_registro' || (r.order_hist === 'bajo' && r.order_prepaid)))) return false;
     if (filter === 'prepay' && !(r.order_hist === 'bajo' && !r.order_prepaid && r.order_status !== 'cancelled')) return false;
     if (filter === 'address' && !['dudosa', 'no_encontrada'].includes(r.order_addr)) return false;

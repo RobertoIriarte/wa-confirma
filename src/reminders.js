@@ -6,6 +6,7 @@ import * as shopify from './shopify.js';
 import * as wa from './whatsapp.js';
 import { money } from './orders.js';
 import { handleLowHistory } from './agent.js';
+import { updateShipping, runShippingNotices } from './shipping.js';
 
 const R = config.reminders;
 
@@ -84,6 +85,8 @@ export async function syncOrders() {
         try { await handleLowHistory(cur); } catch (e) { console.error('[historial]', e.message); }
       }
     }
+    // Estado del envío escrito por la tarea programada → se guarda y (si corresponde) se avisa a la clienta
+    if (linked && o.shipping?.status) updateShipping(o.id, o.shipping);
   }
   db.setSetting('last_sync_at', new Date().toISOString());
   // Pedidos recientes (últimas 6 h), abiertos y sin historial revisado → pedir revisión inmediata
@@ -137,7 +140,7 @@ export function startScheduler() {
     return;
   }
   const tick = async () => {
-    try { await syncOrders(); await runAutoReminders(); }
+    try { await syncOrders(); await runAutoReminders(); await runShippingNotices(); }
     catch (e) { console.error('[sync]', e.message); }
   };
   setTimeout(tick, 3000);
