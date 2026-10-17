@@ -68,6 +68,9 @@ function novedadText(raw) {
   return 'tuvo un inconveniente con la entrega';
 }
 
+// Región Metropolitana (el texto de "en tránsito" cambia: el paquete no viaja a otra ciudad)
+export const isSantiago = (o) => /metropolitana|^\s*RM\s*$|^santiago$/i.test(String(o.province || '')) || /región metropolitana/i.test(String(o.address || ''));
+
 function noticeText(o) {
   const who = firstName(o.customer_name);
   const hi = `Hola${who ? ' ' + who : ''} 💗`;
@@ -75,6 +78,7 @@ function noticeText(o) {
   const raw = String(o.ship_raw || '').toUpperCase();
   switch (o.ship_status) {
     case 'en_transito':
+      if (isSantiago(o)) return `${hi} Su pedido *${o.name}* ya fue despachado y está con ${carrier} aquí en Santiago 📦${o.ship_tracking ? `\nN° de seguimiento: *${o.ship_tracking}*` : ''}\n\nPronto saldrá a reparto y le avisaremos por aquí ese mismo día, para que esté pendiente y pueda recibirlo en su domicilio.`;
       return `${hi} Su pedido *${o.name}* ya fue despachado y viaja con ${carrier} hacia su ciudad 📦${o.ship_tracking ? `\nN° de seguimiento: *${o.ship_tracking}*` : ''}\n\nEn los próximos días saldrá a reparto y le avisaremos por aquí ese mismo día, para que esté pendiente y pueda recibirlo en su domicilio.`;
     case 'en_reparto':
       return `${hi} ¡Su pedido *${o.name}* sale hoy a reparto con ${carrier}! 🛵\nPor favor, procure que alguien esté en el domicilio para recibirlo y tenga listo el pago${o.total ? ` de *${money(o.total, o.currency)}*` : ''}.`;
@@ -117,9 +121,10 @@ export async function sendShippingNotice(o, { manual = false } = {}) {
   if (within24h(contact?.last_inbound_at)) {
     r = await wa.sendText(o.wa_id, text, manual ? 'human' : 'bot');
   } else if (S().templates[o.ship_status]) {
+    const tplKey = o.ship_status === 'en_transito' && isSantiago(o) && S().templates.en_transito_rm ? 'en_transito_rm' : o.ship_status;
     const values = { nombre: firstName(o.customer_name), pedido: o.name, transportista: o.ship_carrier || '', seguimiento: o.ship_tracking || 'sin seguimiento', total: money(o.total, o.currency), tienda: config.store.name };
-    const params = (S().templateParams[o.ship_status] || 'nombre,pedido,transportista,seguimiento').split(',').map((k) => values[k.trim()] ?? '');
-    r = await wa.sendTemplate(o.wa_id, { name: S().templates[o.ship_status], language: config.reminders.language, bodyParams: params, preview: text }, manual ? 'human' : 'bot');
+    const params = (S().templateParams[tplKey] || 'nombre,pedido,transportista,seguimiento').split(',').map((k) => values[k.trim()] ?? '');
+    r = await wa.sendTemplate(o.wa_id, { name: S().templates[tplKey], language: config.reminders.language, bodyParams: params, preview: text }, manual ? 'human' : 'bot');
   } else {
     r = { ok: false, error: 'Pasaron más de 24 h desde su último mensaje y no hay plantilla de Meta para este aviso' };
   }
