@@ -146,3 +146,7 @@ src/db.js         base SQLite y métricas
 public/           panel web
 scripts/seed-demo.js  datos de ejemplo
 ```
+
+## Audios
+
+Cuando una clienta envía una nota de voz, el sistema la descarga, la transcribe con OpenAI (`OPENAI_TRANSCRIBE_MODEL`, por defecto `whisper-1`) y el agente responde como si la hubiera escrito. En el panel se puede escuchar el audio y leer la transcripción. Si no se puede transcribir, se le pide amablemente que escriba su consulta. Los audios quedan guardados en `DATA_DIR/media`.

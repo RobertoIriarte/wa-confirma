@@ -5,6 +5,7 @@ import * as wa from './whatsapp.js';
 import * as shopify from './shopify.js';
 import { applyStatus, flagForReview, money } from './orders.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
+import { processAudio } from './media.js';
 
 const STORE = () => config.store.name;
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
@@ -230,15 +231,25 @@ export function handleInbound(evt) {
   return next;
 }
 
-async function processInbound({ waId, name, waMessageId, kind, text, buttonId }) {
+async function processInbound({ waId, name, waMessageId, kind, text, buttonId, mediaId, mime }) {
   if (waMessageId && db.messageExists(waMessageId)) return; // duplicado
   db.upsertContact(waId, name);
-  db.saveMessage({ waId, direction: 'in', sender: 'customer', kind, body: text, waMessageId, meta: buttonId ? { buttonId } : null });
+  let meta = buttonId ? { buttonId } : null;
+  // Audio: se guarda para escucharlo en el panel y se transcribe para que el agente lo entienda
+  if (kind === 'audio' && mediaId) {
+    const a = await processAudio(mediaId, mime);
+    meta = { audio: a.file || null, transcript: a.transcript || null, audioError: a.error || null };
+    if (a.transcript) text = `🎤 ${a.transcript}`;
+  }
+  db.saveMessage({ waId, direction: 'in', sender: 'customer', kind, body: text, waMessageId, meta });
   wa.markRead(waMessageId);
 
   const contact = db.getContact(waId);
   if (contact.bot_paused) return; // lo está atendiendo una persona
   if (['reaction', 'sticker', 'unsupported', 'edit', 'unknown', 'system'].includes(kind)) return; // no requieren respuesta
+  if (kind === 'audio' && !meta?.transcript) {
+    return wa.sendText(waId, 'Disculpe, no pudimos escuchar su audio 🙏 ¿Podría escribirnos su consulta por este medio? Así le respondemos de inmediato.');
+  }
 
   let order = db.activeOrderFor(waId);
 
@@ -337,7 +348,7 @@ Tu objetivo principal es que el cliente confirme o cancele su pedido. Reglas:
 - Si el pedido está pendiente y la clienta hizo una pregunta: respóndela SIEMPRE (en el campo "respuesta" de mostrar_resumen_con_botones, o como texto si no usas la herramienta). Nunca dejes una pregunta sin responder.
 - Si no hay pedido vinculado, pide el número de pedido (aparece en el correo de compra, ej. #1001) y usa buscar_pedido.
 - Las herramientas confirmar_pedido, cancelar_pedido, derivar_a_humano y mostrar_resumen_con_botones ya envían su propio mensaje: después de usarlas responde con texto vacío salvo que haga falta agregar algo distinto.
-- Si el cliente envía audio o imagen que no puedes ver, pídele amablemente que lo escriba.
+- Los mensajes que empiezan con 🎤 son audios de la clienta transcritos automáticamente: respóndelos con normalidad. Si envía una imagen que no puedes ver, pídele amablemente que la describa por escrito.
 
 Información de la tienda:
 ${config.store.info || '(sin información adicional)'}

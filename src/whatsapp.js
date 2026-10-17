@@ -71,6 +71,15 @@ export function sendTemplate(to, { name, language, bodyParams = [], buttonPayloa
   return sendAndLog(to, payload, { sender, body: preview || `[Plantilla ${name}]`, kind: 'template', meta: { template: name } });
 }
 
+// Descarga un archivo recibido (audio, imagen) desde la API de WhatsApp
+export async function downloadMedia(mediaId) {
+  const meta = await fetch(`https://graph.facebook.com/${config.whatsapp.graphVersion}/${mediaId}`, { headers: { Authorization: `Bearer ${config.whatsapp.token}` } }).then((r) => r.json());
+  if (!meta.url) throw new Error(meta.error?.message || 'No se pudo obtener el archivo');
+  const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${config.whatsapp.token}` } });
+  if (!res.ok) throw new Error(`Descarga falló (${res.status})`);
+  return { buffer: Buffer.from(await res.arrayBuffer()), mime: meta.mime_type || res.headers.get('content-type') || 'audio/ogg' };
+}
+
 export async function markRead(messageId) {
   if (!whatsappReady() || !messageId) return;
   try { await post({ status: 'read', message_id: messageId }); } catch { /* no es crítico */ }
@@ -95,7 +104,7 @@ export function parseInbound(m) {
     }
     case 'button': return { kind: 'button', text: m.button?.text || '', buttonId: m.button?.payload };
     case 'image': return { kind: 'image', text: m.image?.caption ? `[Imagen] ${m.image.caption}` : '[Imagen]' };
-    case 'audio': return { kind: 'audio', text: '[Audio]' };
+    case 'audio': return { kind: 'audio', text: '[Audio]', mediaId: m.audio?.id, mime: m.audio?.mime_type };
     case 'video': return { kind: 'video', text: '[Video]' };
     case 'document': return { kind: 'document', text: `[Documento] ${m.document?.filename || ''}`.trim() };
     case 'location': {

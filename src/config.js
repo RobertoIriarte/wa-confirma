@@ -82,6 +82,7 @@ export const config = {
     model: env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
     openaiKey: env.OPENAI_API_KEY || '',
     openaiModel: env.OPENAI_MODEL || 'gpt-5-mini',
+    transcribeModel: env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1', // transcripción de audios (requiere OPENAI_API_KEY)
     // openai | anthropic. Por defecto: el que tenga clave (si están ambas, OpenAI)
     provider: (env.AI_PROVIDER || (env.OPENAI_API_KEY ? 'openai' : 'anthropic')).toLowerCase(),
     historyMessages: Number(env.AI_HISTORY_MESSAGES || 20),

@@ -11,6 +11,7 @@ import * as shopify from './shopify.js';
 import { handleInbound, orderSummaryButtons, requestPrepay } from './agent.js';
 import { applyStatus, clearReview } from './orders.js';
 import * as reminders from './reminders.js';
+import { mediaPath } from './media.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
 
 // Veredicto para confirmar en Dropi, con sus razones
@@ -132,6 +133,14 @@ async function api(req, res, url) {
   if (p === '/api/status') {
     let shop = null; try { shop = await shopify.ping(); } catch (e) { shop = { ok: false, reason: e.message }; }
     return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
+  }
+  let mm = p.match(/^\/api\/media\/([\w.-]+)$/);
+  if (mm) {
+    const file = mediaPath(mm[1]);
+    if (!file) return send(res, 404, { error: 'No existe' });
+    const ext = path.extname(file).slice(1);
+    res.writeHead(200, { 'Content-Type': { ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', amr: 'audio/amr' }[ext] || 'application/octet-stream', 'Cache-Control': 'private, max-age=86400' });
+    return fs.createReadStream(file).pipe(res);
   }
   if (p === '/api/conversations' && req.method === 'GET') {
     return send(res, 200, db.listConversations({ filter: url.searchParams.get('filter') || 'all', q: url.searchParams.get('q') || '' }));

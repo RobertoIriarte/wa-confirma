@@ -245,8 +245,9 @@ function renderMessages(msgs, scrollDown) {
     lastDay = day;
     const out = m.direction === 'out';
     const ticks = out ? ({ sent: '✓', delivered: '✓✓', read: '✓✓ leído', failed: 'no enviado' })[m.status] || '' : '';
+    const audio = m.kind === 'audio' && m.meta?.audio ? `<audio class="msg-audio" controls preload="none" src="/api/media/${esc(m.meta.audio)}"></audio>${m.meta.transcript ? '<span class="msg-note">Transcripción automática</span>' : ''}` : (m.kind === 'audio' && m.meta?.audioError ? `<span class="msg-note">No se pudo procesar el audio: ${esc(m.meta.audioError)}</span>` : '');
     const buttons = m.kind === 'buttons' && m.meta?.buttons ? `<div class="msg-buttons">${m.meta.buttons.map((b) => `<span>${esc(b)}</span>`).join('')}</div>` : '';
-    return `${sep}<li class="msg ${out ? 'out' : 'in'} ${m.sender} ${m.status === 'failed' ? 'failed' : ''}">${esc(m.body)}${buttons}${m.meta?.error ? `<div class="msg-error">${esc(m.meta.error)}</div>` : ''}<div class="msg-foot">${out ? `<span class="who">${SENDER[m.sender] || ''}</span>` : ''}<span>${time(m.created_at)}</span>${ticks ? `<span>${ticks}</span>` : ''}</div></li>`;
+    return `${sep}<li class="msg ${out ? 'out' : 'in'} ${m.sender} ${m.status === 'failed' ? 'failed' : ''}">${audio}${esc(m.body)}${buttons}${m.meta?.error ? `<div class="msg-error">${esc(m.meta.error)}</div>` : ''}<div class="msg-foot">${out ? `<span class="who">${SENDER[m.sender] || ''}</span>` : ''}<span>${time(m.created_at)}</span>${ticks ? `<span>${ticks}</span>` : ''}</div></li>`;
   }).join('');
   if (scrollDown || nearBottom) ol.scrollTop = ol.scrollHeight;
 }
