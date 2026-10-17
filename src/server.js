@@ -9,7 +9,7 @@ import * as db from './db.js';
 import * as wa from './whatsapp.js';
 import * as shopify from './shopify.js';
 import { handleInbound, orderSummaryButtons, requestPrepay } from './agent.js';
-import { applyStatus, clearReview } from './orders.js';
+import { applyStatus, clearReview, flagForReview } from './orders.js';
 import * as reminders from './reminders.js';
 import { mediaPath } from './media.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
@@ -233,6 +233,8 @@ async function api(req, res, url) {
       db.updateOrder(id, { prepaid_at: paid ? db.now() : null });
       db.logEvent(o.wa_id, id, paid ? 'prepaid' : 'prepaid_undo', 'human');
       if (paid) db.updateContact(o.wa_id, { needs_human: 0 });
+      // Sin mensajes a la clienta: solo se quita (o vuelve a poner) la etiqueta de revisión en Shopify
+      if (paid) await clearReview(id); else await flagForReview(id);
       return send(res, 200, { ok: true });
     }
     db.updateOrder(id, { prepay_requested_at: null, prepay_error: null });
