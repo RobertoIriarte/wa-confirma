@@ -75,7 +75,7 @@ function noticeText(o) {
   const raw = String(o.ship_raw || '').toUpperCase();
   switch (o.ship_status) {
     case 'en_transito':
-      return `${hi} Su pedido *${o.name}* ya va en camino con ${carrier} 🚚${o.ship_tracking ? `\nN° de seguimiento: *${o.ship_tracking}*` : ''}\nLe avisaremos el día que salga a reparto.`;
+      return `${hi} Su pedido *${o.name}* ya fue despachado y viaja con ${carrier} hacia su ciudad 📦${o.ship_tracking ? `\nN° de seguimiento: *${o.ship_tracking}*` : ''}\n\nTodavía *no* sale a reparto, así que por ahora no necesita estar en casa. Le avisaremos por aquí el mismo día en que se lo lleven a su domicilio.`;
     case 'en_reparto':
       return `${hi} ¡Su pedido *${o.name}* sale hoy a reparto con ${carrier}! 🛵\nPor favor, procure que alguien esté en el domicilio para recibirlo y tenga listo el pago${o.total ? ` de *${money(o.total, o.currency)}*` : ''}.`;
     case 'novedad':
