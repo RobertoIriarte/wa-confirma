@@ -246,8 +246,14 @@ function renderMessages(msgs, scrollDown) {
     const out = m.direction === 'out';
     const ticks = out ? ({ sent: '✓', delivered: '✓✓', read: '✓✓ leído', failed: 'no enviado' })[m.status] || '' : '';
     const audio = m.kind === 'audio' && m.meta?.audio ? `<audio class="msg-audio" controls preload="none" src="/api/media/${esc(m.meta.audio)}"></audio>${m.meta.transcript ? '<span class="msg-note">Transcripción automática</span>' : ''}` : (m.kind === 'audio' && m.meta?.audioError ? `<span class="msg-note">No se pudo procesar el audio: ${esc(m.meta.audioError)}</span>` : '');
+    const mediaSrc = (f) => `/api/media/${encodeURIComponent(f)}`;
+    const media = m.meta?.image ? `<a class="msg-img" href="${mediaSrc(m.meta.image)}" target="_blank" rel="noopener"><img src="${mediaSrc(m.meta.image)}" alt="Foto" loading="lazy"></a>`
+      : m.meta?.video ? `<video class="msg-video" controls preload="none" src="${mediaSrc(m.meta.video)}"></video>`
+      : m.meta?.document ? `<a class="msg-doc" href="${mediaSrc(m.meta.document)}" target="_blank" rel="noopener">📄 Abrir documento</a>`
+      : m.meta?.mediaError ? `<span class="msg-note">No se pudo descargar el archivo: ${esc(m.meta.mediaError)}</span>` : '';
+    const body = m.meta?.image && /^\[Imagen\]$/.test(m.body || '') ? '' : esc((m.body || '').replace(/^\[(Imagen|Video)\] /, ''));
     const buttons = m.kind === 'buttons' && m.meta?.buttons ? `<div class="msg-buttons">${m.meta.buttons.map((b) => `<span>${esc(b)}</span>`).join('')}</div>` : '';
-    return `${sep}<li class="msg ${out ? 'out' : 'in'} ${m.sender} ${m.status === 'failed' ? 'failed' : ''}">${audio}${esc(m.body)}${buttons}${m.meta?.error ? `<div class="msg-error">${esc(m.meta.error)}</div>` : ''}<div class="msg-foot">${out ? `<span class="who">${SENDER[m.sender] || ''}</span>` : ''}<span>${time(m.created_at)}</span>${ticks ? `<span>${ticks}</span>` : ''}</div></li>`;
+    return `${sep}<li class="msg ${out ? 'out' : 'in'} ${m.sender} ${m.status === 'failed' ? 'failed' : ''}">${audio}${media}${body}${buttons}${m.meta?.error ? `<div class="msg-error">${esc(m.meta.error)}</div>` : ''}<div class="msg-foot">${out ? `<span class="who">${SENDER[m.sender] || ''}</span>` : ''}<span>${time(m.created_at)}</span>${ticks ? `<span>${ticks}</span>` : ''}</div></li>`;
   }).join('');
   if (scrollDown || nearBottom) ol.scrollTop = ol.scrollHeight;
 }
@@ -404,6 +410,39 @@ $('#composer').addEventListener('submit', async (e) => {
   reply.value = ''; reply.style.height = 'auto';
   try { await api(`/api/conversations/${encodeURIComponent(state.current)}/send`, { method: 'POST', body: { text } }); }
   catch (err) { toast(err.message); }
+  loadConv(true); loadList();
+});
+
+// enviar foto (el texto escrito se envía como descripción debajo de la foto)
+$('#attachBtn').addEventListener('click', () => $('#attachInput').click());
+async function shrinkImage(file) {
+  // Las fotos del celular suelen pesar varios MB: se achican a 1600 px en JPG (WhatsApp acepta hasta 5 MB)
+  const img = await createImageBitmap(file).catch(() => null);
+  if (!img) return file;
+  const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+  if (scale === 1 && file.size < 1.5e6 && /jpe?g|png/.test(file.type)) return file;
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return new Promise((ok) => c.toBlob((b) => ok(b || file), 'image/jpeg', 0.85));
+}
+$('#attachInput').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0]; e.target.value = '';
+  if (!file || !state.current) return;
+  const caption = reply.value.trim();
+  toast('Enviando foto…');
+  try {
+    const blob = await shrinkImage(file);
+    const res = await fetch(`/api/conversations/${encodeURIComponent(state.current)}/image`, {
+      method: 'POST', credentials: 'same-origin', body: blob,
+      headers: { 'Content-Type': blob.type || 'image/jpeg', 'X-Caption': encodeURIComponent(caption) },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { showLogin(); return; }
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+    reply.value = ''; reply.style.height = 'auto';
+    toast('Foto enviada');
+  } catch (err) { toast(err.message); }
   loadConv(true); loadList();
 });
 

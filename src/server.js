@@ -11,7 +11,7 @@ import * as shopify from './shopify.js';
 import { handleInbound, orderSummaryButtons, requestPrepay } from './agent.js';
 import { applyStatus, clearReview, flagForReview } from './orders.js';
 import * as reminders from './reminders.js';
-import { mediaPath } from './media.js';
+import { mediaPath, saveMedia, MIME as MEDIA_MIME } from './media.js';
 import { sendShippingNotice } from './shipping.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
 
@@ -141,7 +141,7 @@ async function api(req, res, url) {
     const file = mediaPath(mm[1]);
     if (!file) return send(res, 404, { error: 'No existe' });
     const ext = path.extname(file).slice(1);
-    res.writeHead(200, { 'Content-Type': { ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', amr: 'audio/amr' }[ext] || 'application/octet-stream', 'Cache-Control': 'private, max-age=86400' });
+    res.writeHead(200, { 'Content-Type': MEDIA_MIME[ext] || 'application/octet-stream', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
     return fs.createReadStream(file).pipe(res);
   }
   if (p === '/api/conversations' && req.method === 'GET') {
@@ -170,6 +170,18 @@ async function api(req, res, url) {
       // Al responder a mano, el bot se pausa para no pisar la conversación
       db.updateContact(waId, { bot_paused: 1, needs_human: 0 });
       const r = await wa.sendText(waId, text.trim(), 'human');
+      return send(res, r.ok ? 200 : 502, r);
+    }
+    if (action === 'image' && req.method === 'POST') {
+      const mime = String(req.headers['content-type'] || '').split(';')[0];
+      if (!['image/jpeg', 'image/png'].includes(mime)) return send(res, 400, { error: 'Solo se pueden enviar fotos JPG o PNG' });
+      let buffer;
+      try { buffer = await readBody(req, 5 * 1024 * 1024); } catch { return send(res, 413, { error: 'La foto pesa más de 5 MB' }); }
+      if (!buffer.length) return send(res, 400, { error: 'Foto vacía' });
+      const caption = decodeURIComponent(String(req.headers['x-caption'] || '')).trim().slice(0, 1000);
+      db.updateContact(waId, { bot_paused: 1, needs_human: 0 });
+      const file = saveMedia(buffer, mime);
+      const r = await wa.sendImage(waId, { buffer, mime, file, caption }, 'human');
       return send(res, r.ok ? 200 : 502, r);
     }
     if (action === 'bot' && req.method === 'POST') {

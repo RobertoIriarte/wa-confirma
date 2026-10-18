@@ -393,3 +393,10 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .badge.ship-en_transito, .badge.ship-en_reparto { background: var(--pending-soft); color: var(--pending); }
 .badge.ship-entregado { background: var(--confirm-soft); color: var(--confirm); }
 .badge.ship-novedad, .badge.ship-devuelto { background: var(--cancel-soft); color: var(--cancel); }
+
+.attach-btn { flex: none; align-self: center; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: var(--ink-2); cursor: pointer; }
+.attach-btn:hover { background: var(--bg); color: var(--ink); }
+.msg-img { display: block; margin: -2px 0 6px; }
+.msg-img img { display: block; max-width: min(260px, 100%); max-height: 320px; border-radius: 8px; object-fit: cover; }
+.msg-video { display: block; max-width: min(260px, 100%); border-radius: 8px; margin-bottom: 6px; }
+.msg-doc { display: inline-block; margin-bottom: 6px; font-weight: 600; }

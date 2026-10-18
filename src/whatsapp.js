@@ -71,6 +71,26 @@ export function sendTemplate(to, { name, language, bodyParams = [], buttonPayloa
   return sendAndLog(to, payload, { sender, body: preview || `[Plantilla ${name}]`, kind: 'template', meta: { template: name } });
 }
 
+// Sube una imagen a WhatsApp y la envía (con texto opcional debajo)
+export async function sendImage(to, { buffer, mime, file, caption = '' }, sender = 'human') {
+  const body = caption || '[Imagen]';
+  const meta = { image: file };
+  if (!whatsappReady()) return sendAndLog(to, { type: 'image', image: { id: 'sim', caption } }, { sender, body, kind: 'image', meta });
+  try {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('type', mime);
+    form.append('file', new Blob([buffer], { type: mime }), file);
+    const res = await fetch(`${api()}/media`, { method: 'POST', headers: { Authorization: `Bearer ${config.whatsapp.token}` }, body: form });
+    const data = await res.json().catch(() => ({}));
+    if (!data.id) throw new Error(data?.error?.message || `No se pudo subir la imagen (${res.status})`);
+    return sendAndLog(to, { type: 'image', image: caption ? { id: data.id, caption } : { id: data.id } }, { sender, body, kind: 'image', meta });
+  } catch (e) {
+    saveMessage({ waId: to, direction: 'out', sender, kind: 'image', body, meta: { ...meta, error: e.message }, status: 'failed' });
+    return { ok: false, error: e.message };
+  }
+}
+
 // Descarga un archivo recibido (audio, imagen) desde la API de WhatsApp
 export async function downloadMedia(mediaId) {
   const meta = await fetch(`https://graph.facebook.com/${config.whatsapp.graphVersion}/${mediaId}`, { headers: { Authorization: `Bearer ${config.whatsapp.token}` } }).then((r) => r.json());
@@ -103,10 +123,10 @@ export function parseInbound(m) {
       return { kind: 'button', text: r?.title || '', buttonId: r?.id };
     }
     case 'button': return { kind: 'button', text: m.button?.text || '', buttonId: m.button?.payload };
-    case 'image': return { kind: 'image', text: m.image?.caption ? `[Imagen] ${m.image.caption}` : '[Imagen]' };
+    case 'image': return { kind: 'image', text: m.image?.caption ? `[Imagen] ${m.image.caption}` : '[Imagen]', mediaId: m.image?.id, mime: m.image?.mime_type };
     case 'audio': return { kind: 'audio', text: '[Audio]', mediaId: m.audio?.id, mime: m.audio?.mime_type };
-    case 'video': return { kind: 'video', text: '[Video]' };
-    case 'document': return { kind: 'document', text: `[Documento] ${m.document?.filename || ''}`.trim() };
+    case 'video': return { kind: 'video', text: m.video?.caption ? `[Video] ${m.video.caption}` : '[Video]', mediaId: m.video?.id, mime: m.video?.mime_type };
+    case 'document': return { kind: 'document', text: `[Documento] ${m.document?.filename || ''}`.trim(), mediaId: m.document?.id, mime: m.document?.mime_type };
     case 'location': {
       const l = m.location || {};
       const label = [l.name, l.address].filter(Boolean).join(', ');

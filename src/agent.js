@@ -5,7 +5,7 @@ import * as wa from './whatsapp.js';
 import * as shopify from './shopify.js';
 import { applyStatus, flagForReview, money } from './orders.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
-import { processAudio } from './media.js';
+import { processAudio, processFile } from './media.js';
 
 const STORE = () => config.store.name;
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || '';
@@ -240,6 +240,9 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId, m
     const a = await processAudio(mediaId, mime);
     meta = { audio: a.file || null, transcript: a.transcript || null, audioError: a.error || null };
     if (a.transcript) text = `🎤 ${a.transcript}`;
+  } else if (['image', 'video', 'document'].includes(kind) && mediaId) {
+    const f = await processFile(mediaId, mime);
+    meta = { [kind]: f.file || null, mediaError: f.error || null };
   }
   db.saveMessage({ waId, direction: 'in', sender: 'customer', kind, body: text, waMessageId, meta });
   wa.markRead(waMessageId);

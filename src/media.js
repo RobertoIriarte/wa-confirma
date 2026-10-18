@@ -8,7 +8,29 @@ import { downloadMedia } from './whatsapp.js';
 export const MEDIA_DIR = path.join(config.dataDir, 'media');
 fs.mkdirSync(MEDIA_DIR, { recursive: true });
 
-const EXT = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr' };
+export const EXT = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr',
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'application/pdf': 'pdf' };
+export const MIME = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
+
+// Guarda un archivo en el volumen y devuelve su nombre
+export function saveMedia(buffer, mime) {
+  const type = String(mime || '').split(';')[0];
+  const file = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${EXT[type] || 'bin'}`;
+  fs.writeFileSync(path.join(MEDIA_DIR, file), buffer);
+  return file;
+}
+
+// Imágenes, videos y documentos recibidos: solo se guardan para verlos en el panel
+export async function processFile(mediaId, mime) {
+  if (!mediaId || !whatsappReady()) return { error: 'sin acceso a WhatsApp' };
+  try {
+    const { buffer, mime: realMime } = await downloadMedia(mediaId);
+    return { file: saveMedia(buffer, realMime || mime) };
+  } catch (e) {
+    console.error('[archivo]', e.message);
+    return { error: e.message };
+  }
+}
 
 async function transcribe(buffer, mime, filename) {
   if (!config.ai.openaiKey) return null;
