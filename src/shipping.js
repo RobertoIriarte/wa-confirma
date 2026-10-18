@@ -128,6 +128,7 @@ export async function sendShippingNotice(o, { manual = false } = {}) {
   } else {
     r = { ok: false, error: 'Pasaron más de 24 h desde su último mensaje y no hay plantilla de Meta para este aviso' };
   }
+  if (r.retry) { db.updateOrder(o.id, { ship_notify_error: r.error }); return r; } // se reintenta en la próxima pasada
   db.updateOrder(o.id, { ship_notified: o.ship_status, ship_notified_at: r.ok ? db.now() : null, ship_notify_error: r.ok ? null : r.error });
   db.logEvent(o.wa_id, o.id, r.ok ? 'ship_notice_sent' : 'ship_notice_failed', `${o.ship_status}${r.ok ? '' : `: ${r.error}`}`);
   return r;

@@ -105,6 +105,7 @@ export async function sendReminder(orderId, { manual = false } = {}) {
     throw new Error(`El pedido ${s.name} no tiene un teléfono válido`);
   }
   // Se vincula el pedido a esa conversación para que los botones de la plantilla funcionen
+  const isNew = !db.getContact(to);
   db.upsertContact(to, s.customer_name?.split(' ')[0] || null);
   db.linkOrder({ id: s.id, name: s.name, customerName: s.customer_name, phone: s.phone, total: s.total, currency: s.currency, items: s.items, address: s.address, createdAt: s.created_at }, to, true);
 
@@ -117,6 +118,12 @@ export async function sendReminder(orderId, { manual = false } = {}) {
     buttonPayloads: [`confirm:${s.id}`, `cancel_ask:${s.id}`],
     preview: `Recordatorio automático (plantilla "${R.template}") para confirmar el pedido ${s.name}`,
   }, manual ? 'human' : 'bot');
+  if (r.retry) {
+    // Plantilla en revisión: se reintenta en la próxima sincronización sin dejar rastro en la bandeja
+    if (isNew && !db.getMessages(to, 1).length) db.deleteConversation(to);
+    db.updateShopOrder(orderId, { reminder_status: null, reminder_error: r.error });
+    throw new Error(r.error);
+  }
   db.updateShopOrder(orderId, { reminder_status: r.ok ? 'sent' : 'failed', reminder_error: r.ok ? null : r.error, reminder_at: db.now() });
   db.logEvent(to, s.id, r.ok ? 'reminder_sent' : 'reminder_failed', r.error || (manual ? 'manual' : 'auto'));
   if (!r.ok) throw new Error(r.error);

@@ -27,6 +27,9 @@ async function post(payload) {
 }
 
 // Envía y registra en la base. sender: bot | ai | human
+// Errores de Meta cuando la plantilla aún no está aprobada, está pausada o desactivada
+const TEMPLATE_NOT_READY = new Set([132001, 132015, 132016]);
+
 async function sendAndLog(to, payload, { sender, body, kind, meta }) {
   try {
     const r = await post({ to, ...payload });
@@ -34,6 +37,10 @@ async function sendAndLog(to, payload, { sender, body, kind, meta }) {
     return { ok: true, id: r.id };
   } catch (e) {
     // 131047 = pasaron más de 24 h desde el último mensaje del cliente
+    if (payload.type === 'template' && TEMPLATE_NOT_READY.has(e.code)) {
+      console.log('[whatsapp] plantilla aún no disponible:', payload.template?.name, e.message);
+      return { ok: false, retry: true, error: `La plantilla "${payload.template?.name}" aún no está aprobada en Meta` };
+    }
     const reason = e.code === 131047 ? 'Fuera de la ventana de 24 h: el cliente debe escribir primero o hay que usar una plantilla.' : e.message;
     saveMessage({ waId: to, direction: 'out', sender, kind, body, meta: { ...(meta || {}), error: reason }, status: 'failed' });
     console.error('[whatsapp] error al enviar:', reason);
