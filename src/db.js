@@ -84,9 +84,26 @@ for (const [table, col, type] of [
   ['orders', 'prepaid_at', 'TEXT'],
   ['orders', 'ship_status', 'TEXT'],   // preparado | en_transito | en_reparto | novedad | entregado | devuelto
   ['orders', 'ship_raw', 'TEXT'], ['orders', 'ship_carrier', 'TEXT'], ['orders', 'ship_tracking', 'TEXT'], ['orders', 'ship_updated_at', 'TEXT'],
+  ['contacts', 'archived', 'INTEGER NOT NULL DEFAULT 0'], // 1 = pedido entregado: va a "Entregados" y el bot no responde
+  ['contacts', 'archived_at', 'TEXT'],
   ['orders', 'ship_notified', 'TEXT'], ['orders', 'ship_notified_at', 'TEXT'], ['orders', 'ship_notify_error', 'TEXT'],
 ]) {
   try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch { /* ya existe */ }
+}
+
+// Archiva una conversación si todos sus pedidos abiertos ya fueron entregados
+export function archiveIfDelivered(waId) {
+  if (!waId) return false;
+  const c = db.prepare('SELECT archived FROM contacts WHERE wa_id = ?').get(waId);
+  if (!c || c.archived) return false;
+  const orders = db.prepare("SELECT status, ship_status FROM orders WHERE wa_id = ? AND status != 'cancelled'").all(waId);
+  if (!orders.length || !orders.every((o) => o.ship_status === 'entregado')) return false;
+  db.prepare("UPDATE contacts SET archived = 1, archived_at = ?, bot_paused = 1, needs_human = 0, human_reason = NULL WHERE wa_id = ?").run(new Date().toISOString(), waId);
+  db.prepare('INSERT INTO events (wa_id, order_id, type, detail, created_at) VALUES (?, NULL, ?, ?, ?)').run(waId, 'archived', 'pedido entregado', new Date().toISOString());
+  return true;
+}
+export function unarchive(waId, { resumeBot = false } = {}) {
+  db.prepare(`UPDATE contacts SET archived = 0, archived_at = NULL${resumeBot ? ', bot_paused = 0' : ''} WHERE wa_id = ?`).run(waId);
 }
 
 export const getSetting = (k) => db.prepare('SELECT value FROM settings WHERE key = ?').get(k)?.value ?? null;
@@ -247,6 +264,9 @@ export function listConversations({ filter = 'all', q = '' } = {}) {
     LIMIT 500`).all();
   const term = q.trim().toLowerCase();
   return rows.filter((r) => {
+    // Los entregados/archivados solo aparecen en su sección
+    if (filter === 'archived') { if (!r.archived) return false; }
+    else if (r.archived) return false;
     if (filter === 'human' && !r.needs_human && !r.bot_paused) return false;
     if (['pending', 'confirmed', 'cancelled'].includes(filter) && r.order_status !== filter) return false;
     if (filter === 'no_order' && r.order_id) return false;
@@ -338,4 +358,10 @@ export function metrics(days = 7) {
     needsHuman: db.prepare('SELECT COUNT(*) AS n FROM contacts WHERE needs_human = 1').get().n,
     series: Object.entries(series).map(([day, v]) => ({ day, ...v })),
   };
+}
+
+// Una sola vez: archivar las conversaciones cuyos pedidos ya estaban entregados
+if (!getSetting('archived_migration')) {
+  for (const { wa_id } of db.prepare("SELECT DISTINCT wa_id FROM orders WHERE ship_status = 'entregado' AND wa_id IS NOT NULL").all()) archiveIfDelivered(wa_id);
+  setSetting('archived_migration', '1');
 }

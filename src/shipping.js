@@ -102,6 +102,7 @@ export function updateShipping(orderId, s) {
   if (same) return false;
   db.updateOrder(orderId, { ship_status: s.status, ship_raw: s.raw, ship_carrier: s.carrier, ship_tracking: s.tracking, ship_updated_at: s.updatedAt || db.now() });
   db.logEvent(cur.wa_id, orderId, 'shipping', `${s.status}${s.raw ? ` (${s.raw})` : ''}`);
+  if (s.status === 'entregado' && cur.wa_id) db.archiveIfDelivered(cur.wa_id);
   if (cur.ship_status !== s.status && ['novedad', 'devuelto'].includes(s.status) && cur.wa_id) {
     const what = s.status === 'novedad' ? `Novedad en el envío: ${s.raw || 'sin detalle'}` : `Pedido devuelto: ${s.raw || 'sin detalle'}`;
     db.updateContact(cur.wa_id, { needs_human: 1, human_reason: `${what}${s.carrier ? ` (${s.carrier}${s.tracking ? ` ${s.tracking}` : ''})` : ''}` });

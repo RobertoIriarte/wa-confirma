@@ -250,7 +250,14 @@ async function processInbound({ waId, name, waMessageId, kind, text, buttonId, m
   wa.markRead(waMessageId);
 
   const contact = db.getContact(waId);
-  if (contact.bot_paused) return; // lo está atendiendo una persona
+  if (contact.archived) {
+    // Pedido ya entregado: solo responde una persona. Si llega el mensaje de una compra nueva, vuelve a la bandeja con el bot.
+    const p = parseOrderMessage(text);
+    const known = new Set(db.ordersFor(waId).map((o) => String(o.name).replace(/\D/g, '')));
+    if (!(p.isConfirmation && p.number && !known.has(String(p.number).replace(/\D/g, '')))) return;
+    db.unarchive(waId, { resumeBot: true });
+    db.logEvent(waId, null, 'unarchived', `compra nueva ${p.number}`);
+  } else if (contact.bot_paused) return; // lo está atendiendo una persona
   if (['reaction', 'sticker', 'unsupported', 'edit', 'unknown', 'system'].includes(kind)) return; // no requieren respuesta
   if (kind === 'audio' && !meta?.transcript) {
     return wa.sendText(waId, 'Disculpe, no pudimos escuchar su audio 🙏 ¿Podría escribirnos su consulta por este medio? Así le respondemos de inmediato.');

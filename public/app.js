@@ -207,6 +207,14 @@ $('#deleteConv').addEventListener('click', async () => {
     loadList();
   } catch (e) { toast(e.message); }
 });
+$('#archiveConv').addEventListener('click', async () => {
+  const c = state.detail?.contact; if (!c) return;
+  try {
+    await api(`/api/conversations/${encodeURIComponent(c.wa_id)}/archive`, { method: 'POST', body: { archived: !c.archived } });
+    toast(c.archived ? 'Vuelve a la bandeja (el bot sigue pausado)' : 'Movida a Entregados: el bot ya no responde');
+    loadConv(); loadList();
+  } catch (e) { toast(e.message); }
+});
 $('#toggleOrder').addEventListener('click', () => $('#orderPane').classList.toggle('open'));
 
 async function loadConv(scroll = false) {
@@ -221,8 +229,14 @@ async function loadConv(scroll = false) {
   $('#botToggle').checked = !c.bot_paused;
   $('#botLabel').textContent = c.bot_paused ? 'Bot pausado' : 'Bot activo';
   $('#botLabel').dataset.short = c.bot_paused ? 'Pausado' : 'Bot';
+  $('#archiveConv').title = $('#archiveConv').ariaLabel = c.archived ? 'Sacar de Entregados' : 'Mover a Entregados';
+  $('#archiveConv').classList.toggle('on', Boolean(c.archived));
   const banner = $('#humanBanner');
-  if (c.needs_human) {
+  if (c.archived) {
+    banner.hidden = false;
+    banner.innerHTML = `<span><strong>Pedido entregado.</strong> El bot no responde en esta conversación: solo usted. Si la clienta hace una compra nueva por Releasit, vuelve sola a la bandeja.</span><button class="btn" id="unarchive">Sacar de Entregados</button>`;
+    $('#unarchive').onclick = () => $('#archiveConv').click();
+  } else if (c.needs_human) {
     banner.hidden = false;
     banner.innerHTML = `<span><strong>Necesita a una persona.</strong> ${esc(c.human_reason || '')}</span><button class="btn" id="resumeBot">Devolver al bot</button>`;
     $('#resumeBot').onclick = () => setBot(false);

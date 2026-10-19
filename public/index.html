@@ -78,6 +78,7 @@
             <button class="chip" data-filter="confirmed">Confirmados</button>
             <button class="chip" data-filter="cancelled">Cancelados</button>
             <button class="chip" data-filter="no_order">Sin pedido</button>
+            <button class="chip" data-filter="archived">Entregados</button>
           </div>
         </div>
         <ul id="convList" class="conv-list"></ul>
@@ -102,6 +103,9 @@
               <span class="toggle-track"><span class="toggle-thumb"></span></span>
               <span id="botLabel">Bot activo</span>
             </label>
+            <button id="archiveConv" class="icon-btn" aria-label="Mover a Entregados" title="Mover a Entregados">
+              <svg viewBox="0 0 24 24"><path d="M3 5h18v4H3zM5 9v10h14V9M10 13h4"/></svg>
+            </button>
             <button id="deleteConv" class="icon-btn" aria-label="Borrar conversación" title="Borrar conversación">
               <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
             </button>

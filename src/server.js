@@ -184,8 +184,16 @@ async function api(req, res, url) {
       const r = await wa.sendImage(waId, { buffer, mime, file, caption }, 'human');
       return send(res, r.ok ? 200 : 502, r);
     }
+    if (action === 'archive' && req.method === 'POST') {
+      const { archived = true } = await json(req);
+      if (archived) db.updateContact(waId, { archived: 1, archived_at: db.now(), bot_paused: 1, needs_human: 0, human_reason: null });
+      else db.unarchive(waId);
+      db.logEvent(waId, null, archived ? 'archived' : 'unarchived', 'human');
+      return send(res, 200, { ok: true });
+    }
     if (action === 'bot' && req.method === 'POST') {
       const { paused } = await json(req);
+      if (!paused) db.unarchive(waId);
       db.updateContact(waId, { bot_paused: paused ? 1 : 0, needs_human: 0, human_reason: null });
       db.logEvent(waId, null, paused ? 'bot_paused' : 'bot_resumed', 'human');
       if (!paused) { const o = db.activeOrderFor(waId); if (o) await clearReview(o.id); }
