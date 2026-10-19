@@ -38,7 +38,8 @@ async function osmSearch(q) {
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastOsm = Date.now();
   const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.searchParams.set('q', q);
+  if (typeof q === 'string') url.searchParams.set('q', q);
+  else { if (q.street) url.searchParams.set('street', q.street); if (q.city) url.searchParams.set('city', q.city); url.searchParams.set('country', 'Chile'); }
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('limit', '1');
@@ -50,13 +51,17 @@ async function osmSearch(q) {
 }
 
 async function osmGeocode({ street, city, province }) {
-  const main = expand(street.split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso|sitio|lote)\b/i)[0]).trim();
+  // Solo la calle y el número: sin el sector/villa que viene después de la coma, sin depto/casa y sin ceros a la izquierda
+  const main = expand(street.split(',')[0].split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso|sitio|lote)\b/i)[0])
+    .replace(/\b0+(\d)/g, '$1').trim();
   const noNumber = main.replace(/\b(n[°º]?|nro\.?|#)?\s*\d+\s*$/i, '').replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
   let list;
   try {
     list = await osmSearch([main, city, 'Chile'].filter(Boolean).join(', '));
     // Si no aparece con número, se busca solo la calle en la comuna
     if (!list.length && noNumber && noNumber !== main) list = await osmSearch([noNumber, city, 'Chile'].filter(Boolean).join(', '));
+    // Último intento: búsqueda estructurada (calle + comuna)
+    if (!list.length && noNumber) list = await osmSearch({ street: noNumber, city });
   } catch (e) {
     return { status: e.http ? e.message : 'ERROR', source: 'osm' };
   }
