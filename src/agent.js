@@ -123,6 +123,8 @@ async function addressGate(waId, order, who) {
   if (!config.maps.blockOnDoubt) return false;
   let o = order;
   try { o = await ensureAddressChecked(order); } catch (e) { console.error('[maps]', e.message); return false; }
+  // Con OpenStreetMap (sin clave de Google) solo se marca en el panel: su cobertura en Chile es parcial y no debe frenar ventas
+  if (!config.maps.apiKey && !config.demo) return false;
   if (!['dudosa', 'no_encontrada'].includes(o.addr_status)) return false;
   const d = addressDetail(o);
   const where = [o.street, o.city].filter(Boolean).join(', ') || o.address;

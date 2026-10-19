@@ -23,7 +23,7 @@ function dropiVerdict(o, waId, allOrders) {
   else if (o.status === 'cancelled') add(false, 'La clienta canceló por WhatsApp');
   else add(null, 'La clienta aún no confirma');
   const d = addressDetail(o);
-  if (o.addr_status === 'ok') add(true, 'Dirección encontrada en Google Maps');
+  if (o.addr_status === 'ok') add(true, 'Dirección encontrada en el mapa');
   else if (o.addr_status === 'dudosa' || o.addr_status === 'no_encontrada') add(false, `Dirección ${o.addr_status === 'dudosa' ? 'dudosa' : 'no encontrada'}: ${(d.reasons || []).join('; ')}`);
   else add(null, `Dirección sin validar${d.reasons?.length ? ` (${d.reasons.join('; ')})` : ''}`);
   const minRate = config.history.minRate;

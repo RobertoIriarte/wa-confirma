@@ -141,7 +141,7 @@ function renderHealth(s) {
     s.whatsapp ? ['on', 'WhatsApp conectado'] : ['sim', 'WhatsApp simulado'],
     shop,
     s.ai ? ['on', `IA activa (${s.aiName || ''})`] : ['', 'IA desactivada'],
-    s.maps ? ['on', 'Google Maps activo'] : s.demo ? ['sim', 'Google Maps simulado'] : ['', 'Google Maps sin configurar'],
+    s.maps ? ['on', 'Direcciones: Google Maps'] : s.demo ? ['sim', 'Google Maps simulado'] : ['on', 'Direcciones: OpenStreetMap'],
   ];
   $('#health').innerHTML = items.map(([c, t]) => `<li><span class="dot ${c}"></span>${esc(t)}</li>`).join('');
   $('#simulator').hidden = !s.demo;
@@ -321,7 +321,7 @@ function renderOrder(d, prevStatus) {
   if (rs) rs.onclick = async () => { try { await api(`/api/conversations/${encodeURIComponent(state.current)}/resend`, { method: 'POST' }); toast('Resumen enviado'); loadConv(); } catch (e) { toast(e.message); } };
 }
 
-const ADDR = { ok: ['ok', '✓ Encontrada en Google Maps'], dudosa: ['warn', '⚠ Dirección dudosa'], no_encontrada: ['bad', '✕ No encontrada en Google Maps'], sin_validar: ['', 'Sin validar'] };
+const ADDR = { ok: ['ok', '✓ Encontrada en el mapa'], dudosa: ['warn', '⚠ Dirección dudosa'], no_encontrada: ['bad', '✕ No encontrada en el mapa'], sin_validar: ['', 'Sin validar'] };
 function addrLine(o) {
   const [cls, label] = ADDR[o.addr_status] || ['', 'Sin validar'];
   const reasons = (o.addr?.reasons || []).filter((r) => !r.startsWith('Encontrada en'));

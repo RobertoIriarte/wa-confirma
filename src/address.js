@@ -1,4 +1,4 @@
-// Valida que la dirección de despacho exista, usando la API de geocodificación de Google Maps.
+// Valida que la dirección de despacho exista: con Google Maps si hay clave, si no con OpenStreetMap (gratis).
 // Resultado: ok | dudosa | no_encontrada | sin_validar (sin clave o error de Google: no bloquea nada)
 import { config } from './config.js';
 import * as db from './db.js';
@@ -28,6 +28,34 @@ async function geocode(query) {
   return res.json();
 }
 
+// OpenStreetMap (Nominatim): gratis, máx. 1 consulta por segundo. Se traduce al formato de Google para reutilizar judge().
+let lastOsm = 0;
+async function osmGeocode({ street, city, province }) {
+  const wait = 1100 - (Date.now() - lastOsm);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastOsm = Date.now();
+  const url = new URL('https://nominatim.openstreetmap.org/search');
+  url.searchParams.set('q', [street.split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso)\b/i)[0], city, province, 'Chile'].filter(Boolean).join(', '));
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('limit', '1');
+  url.searchParams.set('countrycodes', config.maps.country.toLowerCase());
+  url.searchParams.set('accept-language', 'es');
+  const res = await fetch(url, { headers: { 'User-Agent': `${config.store.name.replace(/[^\w ]/g, '')}-confirmaciones/1.0` } });
+  if (!res.ok) return { status: `HTTP_${res.status}` };
+  const list = await res.json();
+  if (!list.length) return { status: 'ZERO_RESULTS', results: [] };
+  const h = list[0], a = h.address || {};
+  const comps = [];
+  if (a.house_number) comps.push({ long_name: a.house_number, types: ['street_number'] });
+  const road = a.road || a.pedestrian || a.footway || a.residential;
+  if (road) comps.push({ long_name: road, types: ['route'] });
+  for (const k of ['city', 'town', 'village', 'municipality', 'suburb', 'city_district', 'county', 'hamlet']) {
+    if (a[k]) comps.push({ long_name: a[k], types: ['locality'] });
+  }
+  return { status: 'OK', source: 'osm', results: [{ formatted_address: h.display_name, place_id: null, address_components: comps, geometry: { location: { lat: Number(h.lat), lng: Number(h.lon) } } }] };
+}
+
 // Simulación para el modo DEMO (sin clave): direcciones con "999" no existen, sin número = dudosa
 function demoGeocode(street, city) {
   if (/999/.test(street)) return { status: 'ZERO_RESULTS', results: [] };
@@ -48,6 +76,7 @@ function demoGeocode(street, city) {
  * Devuelve { status, reasons: [], formatted, mapsUrl, lat, lng, google_city }
  */
 export function judge({ street, city }, data) {
+  const SRC = data.source === 'osm' ? 'OpenStreetMap' : 'Google Maps';
   const query = [street, city].filter(Boolean).join(', ');
   const out = { status: 'ok', reasons: [], formatted: null, mapsUrl: mapsSearch(`${query}, Chile`), lat: null, lng: null };
   const wantedNumber = streetNumber(street);
@@ -55,10 +84,10 @@ export function judge({ street, city }, data) {
 
   if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
     // Error de Google (clave, cuota, etc.): no se bloquea el pedido
-    return { ...out, status: 'sin_validar', reasons: [`Google Maps respondió ${data.status}${data.error_message ? `: ${data.error_message}` : ''}`] };
+    return { ...out, status: 'sin_validar', reasons: [`${SRC} respondió ${data.status}${data.error_message ? `: ${data.error_message}` : ''}`] };
   }
   if (data.status === 'ZERO_RESULTS' || !data.results?.length) {
-    return { ...out, status: 'no_encontrada', reasons: ['Google Maps no encontró esta dirección', ...out.reasons] };
+    return { ...out, status: 'no_encontrada', reasons: [`${SRC} no encontró esta dirección`, ...out.reasons] };
   }
 
   const r = data.results[0];
@@ -78,7 +107,7 @@ export function judge({ street, city }, data) {
 
   if (!route) {
     out.status = 'no_encontrada';
-    out.reasons.unshift(`Google no encontró la calle; solo ubicó ${places[0] ? `la zona de ${places[0]}` : 'la región'}`);
+    out.reasons.unshift(`${SRC} no encontró la calle; solo ubicó ${places[0] ? `la zona de ${places[0]}` : 'la región'}`);
     return out;
   }
   // ¿Es la misma calle?
@@ -86,7 +115,7 @@ export function judge({ street, city }, data) {
   const gotWords = new Set(significant(route));
   if (wantWords.length && !wantWords.some((w) => gotWords.has(w))) {
     out.status = 'dudosa';
-    out.reasons.push(`Google la ubicó en otra calle: ${route}`);
+    out.reasons.push(`${SRC} la ubicó en otra calle: ${route}`);
   }
   // ¿Es la misma comuna?
   if (city && places.length) {
@@ -97,12 +126,16 @@ export function judge({ street, city }, data) {
     }
   }
   // ¿Encontró el número?
-  if (wantedNumber && number !== wantedNumber) {
+  if (wantedNumber && !number && data.source === 'osm') {
+    if (out.status === 'ok')
+    // OpenStreetMap casi no tiene numeración en Chile: si la calle y la comuna calzan, se da por buena
+    out.reasons.push(`Calle verificada en OpenStreetMap (no tiene registrado el número ${wantedNumber})`);
+  } else if (wantedNumber && number !== wantedNumber) {
     out.status = 'dudosa';
-    out.reasons.push(number ? `Google ubicó el número ${number}, no el ${wantedNumber}` : `Google encontró la calle ${route} pero no el número ${wantedNumber}`);
+    out.reasons.push(number ? `${SRC} ubicó el número ${number}, no el ${wantedNumber}` : `${SRC} encontró la calle ${route} pero no el número ${wantedNumber}`);
   }
   if (!wantedNumber && out.status === 'ok') out.status = 'dudosa';
-  if (out.status === 'ok') out.reasons.push(`Encontrada en Google Maps: ${r.formatted_address}`);
+  if (out.status === 'ok' && !out.reasons.length) out.reasons.push(`Encontrada en ${SRC}: ${r.formatted_address}`);
   return out;
 }
 
@@ -110,12 +143,13 @@ export async function checkAddress(order) {
   const street = order.street || String(order.address || '').split(',')[0];
   const city = order.city || '';
   if (!street) return { status: 'no_encontrada', reasons: ['El pedido no tiene dirección'], mapsUrl: null };
-  if (!config.maps.apiKey && !config.demo) return { status: 'sin_validar', reasons: ['Falta GOOGLE_MAPS_API_KEY'], mapsUrl: mapsSearch(`${street}, ${city}, Chile`) };
   try {
-    const data = config.maps.apiKey ? await geocode([street, city, order.province, 'Chile'].filter(Boolean).join(', ')) : demoGeocode(street, city);
+    const data = config.maps.apiKey ? await geocode([street, city, order.province, 'Chile'].filter(Boolean).join(', '))
+      : config.demo ? demoGeocode(street, city)
+      : await osmGeocode({ street, city, province: order.province });
     return judge({ street, city }, data);
   } catch (e) {
-    return { status: 'sin_validar', reasons: [`No se pudo consultar Google Maps: ${e.message}`], mapsUrl: mapsSearch(`${street}, ${city}, Chile`) };
+    return { status: 'sin_validar', reasons: [`No se pudo consultar el mapa: ${e.message}`], mapsUrl: mapsSearch(`${street}, ${city}, Chile`) };
   }
 }
 
