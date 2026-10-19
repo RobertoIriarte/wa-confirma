@@ -52,15 +52,17 @@ async function osmSearch(q) {
 
 async function osmGeocode({ street, city, province }) {
   // Solo la calle y el número: sin el sector/villa que viene después de la coma, sin depto/casa y sin ceros a la izquierda
-  const main = expand(street.split(',')[0].split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso|sitio|lote)\b/i)[0])
-    .replace(/\b0+(\d)/g, '$1').trim();
+  const main = expand(street.split(',')[0].split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso|sitio|lote)\b/i)[0]).trim();
+  const noZero = main.replace(/\b0+(\d)/g, '$1');
   const noNumber = main.replace(/\b(n[°º]?|nro\.?|#)?\s*\d+\s*$/i, '').replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
   let list;
   try {
     list = await osmSearch([main, city, 'Chile'].filter(Boolean).join(', '));
+    // Con y sin el 0 inicial (en Temuco y otras ciudades del sur la numeración lleva 0 adelante)
+    if (!list.length && noZero !== main) list = await osmSearch([noZero, city, 'Chile'].filter(Boolean).join(', '));
+    if (!list.length) list = await osmSearch({ street: main, city });
     // Si no aparece con número, se busca solo la calle en la comuna
     if (!list.length && noNumber && noNumber !== main) list = await osmSearch([noNumber, city, 'Chile'].filter(Boolean).join(', '));
-    // Último intento: búsqueda estructurada (calle + comuna)
     if (!list.length && noNumber) list = await osmSearch({ street: noNumber, city });
   } catch (e) {
     return { status: e.http ? e.message : 'ERROR', source: 'osm' };
@@ -147,11 +149,7 @@ export function judge({ street, city }, data) {
     }
   }
   // ¿Encontró el número?
-  if (wantedNumber && !number && data.source === 'osm') {
-    if (out.status === 'ok')
-    // OpenStreetMap casi no tiene numeración en Chile: si la calle y la comuna calzan, se da por buena
-    out.reasons.push(`Calle verificada en OpenStreetMap (no tiene registrado el número ${wantedNumber})`);
-  } else if (wantedNumber && number !== wantedNumber) {
+  if (wantedNumber && number !== wantedNumber) {
     out.status = 'dudosa';
     out.reasons.push(number ? `${SRC} ubicó el número ${number}, no el ${wantedNumber}` : `${SRC} encontró la calle ${route} pero no el número ${wantedNumber}`);
   }
