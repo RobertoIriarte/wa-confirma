@@ -30,21 +30,37 @@ async function geocode(query) {
 
 // OpenStreetMap (Nominatim): gratis, máx. 1 consulta por segundo. Se traduce al formato de Google para reutilizar judge().
 let lastOsm = 0;
-async function osmGeocode({ street, city, province }) {
+const ABBR = [[/\bpje\.?\s*/gi, 'Pasaje '], [/\bpsje\.?\s*/gi, 'Pasaje '], [/\bavda?\.?\s+/gi, 'Avenida '], [/\bav\.\s*/gi, 'Avenida '], [/\bgral\.?\s*/gi, 'General '], [/\bstgo\.?\b/gi, 'Santiago']];
+const expand = (t) => ABBR.reduce((acc, [re, rep]) => acc.replace(re, rep), t);
+
+async function osmSearch(q) {
   const wait = 1100 - (Date.now() - lastOsm);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastOsm = Date.now();
   const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.searchParams.set('q', [street.split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso)\b/i)[0], city, province, 'Chile'].filter(Boolean).join(', '));
+  url.searchParams.set('q', q);
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('limit', '1');
   url.searchParams.set('countrycodes', config.maps.country.toLowerCase());
   url.searchParams.set('accept-language', 'es');
   const res = await fetch(url, { headers: { 'User-Agent': `${config.store.name.replace(/[^\w ]/g, '')}-confirmaciones/1.0` } });
-  if (!res.ok) return { status: `HTTP_${res.status}` };
-  const list = await res.json();
-  if (!list.length) return { status: 'ZERO_RESULTS', results: [] };
+  if (!res.ok) throw Object.assign(new Error(`HTTP_${res.status}`), { http: true });
+  return res.json();
+}
+
+async function osmGeocode({ street, city, province }) {
+  const main = expand(street.split(/\b(depto|dpto|departamento|casa|block|torre|of|oficina|piso|sitio|lote)\b/i)[0]).trim();
+  const noNumber = main.replace(/\b(n[°º]?|nro\.?|#)?\s*\d+\s*$/i, '').replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
+  let list;
+  try {
+    list = await osmSearch([main, city, 'Chile'].filter(Boolean).join(', '));
+    // Si no aparece con número, se busca solo la calle en la comuna
+    if (!list.length && noNumber && noNumber !== main) list = await osmSearch([noNumber, city, 'Chile'].filter(Boolean).join(', '));
+  } catch (e) {
+    return { status: e.http ? e.message : 'ERROR', source: 'osm' };
+  }
+  if (!list.length) return { status: 'ZERO_RESULTS', source: 'osm', results: [] };
   const h = list[0], a = h.address || {};
   const comps = [];
   if (a.house_number) comps.push({ long_name: a.house_number, types: ['street_number'] });
@@ -99,7 +115,7 @@ export function judge({ street, city }, data) {
     .map((c) => c.long_name);
   Object.assign(out, {
     formatted: r.formatted_address,
-    mapsUrl: mapsSearch(r.formatted_address, r.place_id),
+    mapsUrl: data.source === 'osm' && r.geometry?.location ? `https://www.google.com/maps?q=${r.geometry.location.lat},${r.geometry.location.lng}` : mapsSearch(r.formatted_address, r.place_id),
     lat: r.geometry?.location?.lat ?? null,
     lng: r.geometry?.location?.lng ?? null,
     google_city: places[0] || null,
@@ -111,7 +127,7 @@ export function judge({ street, city }, data) {
     return out;
   }
   // ¿Es la misma calle?
-  const wantWords = significant(street.split(/\d/)[0]);
+  const wantWords = significant((data.source === 'osm' ? expand(street) : street).split(/\d/)[0]);
   const gotWords = new Set(significant(route));
   if (wantWords.length && !wantWords.some((w) => gotWords.has(w))) {
     out.status = 'dudosa';
