@@ -92,6 +92,30 @@ export const shipTagFor = (status) => STATUS_TAG.has(norm(status)) ? STATUS_TAG.
 const DEAD = new Set(['CANCELADO', 'RECHAZADO', 'GUIA ANULADA', 'CANCELADA'].map(norm));
 const cap = (s) => { const t = String(s || '').trim().toLowerCase(); return t ? t[0].toUpperCase() + t.slice(1) : 'Transportadora'; };
 
+export const isDeadStatus = (st) => DEAD.has(norm(st));
+
+// Empareja pedidos de Shopify ({id, phone, createdAt}) con pedidos de Dropi por teléfono y fecha.
+// Dropi no guarda el número de Shopify. Ventana amplia: Dropi guarda la hora sin zona horaria.
+export function matchDropi(shopOrders, dropiOrders) {
+  const byPhone = new Map();
+  for (const d of dropiOrders) {
+    const p = nationalPhone(d.customer_phone);
+    if (!p) continue;
+    if (!byPhone.has(p)) byPhone.set(p, []);
+    byPhone.get(p).push({ ...d, t: Date.parse(String(d.created_at).replace(' ', 'T') + (/[zZ+]/.test(String(d.created_at).slice(10)) ? '' : 'Z')) });
+  }
+  const used = new Set();
+  const out = new Map();
+  for (const o of [...shopOrders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))) {
+    const t0 = new Date(o.createdAt).getTime();
+    const cands = (byPhone.get(nationalPhone(o.phone)) || []).filter((d) => !used.has(d.order_id) && d.t >= t0 - 5 * 3600e3 && d.t <= t0 + 75 * 3600e3);
+    const alive = cands.filter((d) => !isDeadStatus(d.status));
+    const match = (alive.length ? alive : cands).sort((a, b) => Math.abs(a.t - t0) - Math.abs(b.t - t0))[0];
+    if (match) { used.add(match.order_id); out.set(o.id, match); }
+  }
+  return out;
+}
+
 let lastShipRun = 0;
 export async function syncShipping({ force = false } = {}) {
   if (!dropiConnected()) return { skipped: 'Dropi sin conectar' };
@@ -105,26 +129,12 @@ export async function syncShipping({ force = false } = {}) {
   if (!shopOrders.length) return { checked: 0 };
   const dropiOrders = await listOrders({ from: ymd(new Date(Date.now() - 11 * 86400e3)), until: ymd(new Date(Date.now() + 86400e3)) });
 
-  // Dropi por teléfono
-  const byPhone = new Map();
-  for (const d of dropiOrders) {
-    const p = nationalPhone(d.customer_phone);
-    if (!p) continue;
-    if (!byPhone.has(p)) byPhone.set(p, []);
-    byPhone.get(p).push({ ...d, t: Date.parse(String(d.created_at).replace(' ', 'T') + (/[zZ+]/.test(String(d.created_at).slice(10)) ? '' : 'Z')) });
-  }
-  const used = new Set();
+  const matches = matchDropi(shopOrders, dropiOrders);
   const summary = { checked: shopOrders.length, changed: 0, unmatched: [], unknown: [] };
-  for (const o of shopOrders.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))) {
-    const p = nationalPhone(o.phone);
-    const t0 = new Date(o.createdAt).getTime();
-    // ventana amplia: Dropi guarda la hora sin zona horaria
-    const cands = (byPhone.get(p) || []).filter((d) => !used.has(d.order_id) && d.t >= t0 - 5 * 3600e3 && d.t <= t0 + 75 * 3600e3);
-    const alive = cands.filter((d) => !DEAD.has(norm(d.status)));
-    const pool = alive.length ? alive : cands;
-    const match = pool.sort((a, b) => Math.abs(a.t - t0) - Math.abs(b.t - t0))[0];
+  for (const o of shopOrders) {
+    const match = matches.get(o.id);
     if (!match) { summary.unmatched.push(o.name); continue; }
-    used.add(match.order_id);
+    if (db.getOrder(o.id)) db.updateOrder(o.id, { dropi_order_id: String(match.order_id), dropi_status: match.status });
     const tag = shipTagFor(match.status);
     if (tag === undefined) { summary.unknown.push(`${o.name} (${match.status})`); continue; }
     if (tag !== 'none') {

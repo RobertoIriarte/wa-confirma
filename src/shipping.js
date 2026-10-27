@@ -88,7 +88,7 @@ function noticeText(o) {
       }
       return `${hi} ${carrier} nos informa que ${novedadText(raw)} al intentar entregar su pedido *${o.name}*. ¿Nos ayuda a coordinar una nueva entrega? Indíquenos qué día y horario le acomoda, o si prefiere retirarlo en sucursal.`;
     case 'entregado':
-      return `${hi} Vemos que su pedido *${o.name}* ya fue entregado. ¡Muchas gracias por comprar en ${config.store.name}! Cualquier consulta, estamos por aquí.`;
+      return `${hi} Vemos que su pedido *${o.name}* ya fue entregado. ¡Muchas gracias por comprar en ${config.store.name}! Esperamos que lo disfrute. Cualquier consulta, estamos por aquí.`;
     default:
       return null;
   }

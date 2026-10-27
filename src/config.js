@@ -73,11 +73,11 @@ export const config = {
 
   // Avisos de envío a la clienta (estado escrito por la tarea "Estado de envío Dropi → Shopify")
   shipping: {
-    notify: (env.SHIP_NOTIFY ?? 'en_transito,en_reparto,novedad').split(',').map((s) => s.trim()).filter(Boolean),
+    notify: (env.SHIP_NOTIFY ?? 'en_transito,en_reparto,novedad,entregado').split(',').map((s) => s.trim()).filter(Boolean),
     freshHours: Number(env.SHIP_FRESH_HOURS || 12), // no avisar estados más antiguos que esto (evita avisos atrasados)
     // Plantillas de Meta para avisar pasadas las 24 h (vacío = solo se avisa si la ventana de 24 h está abierta)
-    templates: { en_transito: env.SHIP_TEMPLATE_EN_TRANSITO || '', en_transito_rm: env.SHIP_TEMPLATE_EN_TRANSITO_RM || '', en_reparto: env.SHIP_TEMPLATE_EN_REPARTO || '', novedad: env.SHIP_TEMPLATE_NOVEDAD || '', entregado: env.SHIP_TEMPLATE_ENTREGADO || '' },
-    templateParams: { en_transito: env.SHIP_TEMPLATE_EN_TRANSITO_PARAMS, en_transito_rm: env.SHIP_TEMPLATE_EN_TRANSITO_RM_PARAMS, en_reparto: env.SHIP_TEMPLATE_EN_REPARTO_PARAMS, novedad: env.SHIP_TEMPLATE_NOVEDAD_PARAMS, entregado: env.SHIP_TEMPLATE_ENTREGADO_PARAMS },
+    templates: { en_transito: env.SHIP_TEMPLATE_EN_TRANSITO || '', en_transito_rm: env.SHIP_TEMPLATE_EN_TRANSITO_RM || '', en_reparto: env.SHIP_TEMPLATE_EN_REPARTO || '', novedad: env.SHIP_TEMPLATE_NOVEDAD || '', entregado: env.SHIP_TEMPLATE_ENTREGADO ?? 'envio_entregado' },
+    templateParams: { en_transito: env.SHIP_TEMPLATE_EN_TRANSITO_PARAMS, en_transito_rm: env.SHIP_TEMPLATE_EN_TRANSITO_RM_PARAMS, en_reparto: env.SHIP_TEMPLATE_EN_REPARTO_PARAMS, novedad: env.SHIP_TEMPLATE_NOVEDAD_PARAMS || 'nombre,pedido,transportista', entregado: env.SHIP_TEMPLATE_ENTREGADO_PARAMS || 'nombre,pedido' },
   },
 
   maps: {
