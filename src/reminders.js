@@ -3,6 +3,7 @@
 import { jobsPaused } from './migrate.js';
 import { dropiConnected } from './dropi.js';
 import { checkHistory, syncShipping } from './dropi-sync.js';
+import { runFollowups } from './followups.js';
 import { config, shopifyReady, whatsappReady } from './config.js';
 import * as db from './db.js';
 import * as shopify from './shopify.js';
@@ -153,7 +154,7 @@ export function startScheduler() {
   }
   const tick = async () => {
     if (jobsPaused()) return; // servidor viejo después de un traslado
-    try { await syncOrders(); try { await syncShipping(); } catch (e) { console.error('[dropi envío]', e.message); } await runAutoReminders(); await runShippingNotices(); }
+    try { await syncOrders(); try { await syncShipping(); } catch (e) { console.error('[dropi envío]', e.message); } await runAutoReminders(); try { await runFollowups(); } catch (e) { console.error('[seguimiento]', e.message); } await runShippingNotices(); }
     catch (e) { console.error('[sync]', e.message); }
   };
   setTimeout(tick, 3000);

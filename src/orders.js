@@ -41,6 +41,12 @@ export async function applyStatus(orderId, status, by, opts = {}) {
     warnings.push(`Shopify: ${e.message}`);
     db.logEvent(order.wa_id, orderId, 'shopify_error', e.message);
   }
+  // Si estaba marcado "No responde" y la clienta respondió (confirmó o canceló), se limpia
+  if (order.no_reply_at && status !== 'pending') {
+    try { await shopify.removeTags(orderId, [process.env.TAG_NO_REPLY || 'WA-SIN-RESPUESTA']); } catch { /* no crítico */ }
+    const c = db.getContact(order.wa_id);
+    if (c?.human_reason?.startsWith('No responde')) db.updateContact(order.wa_id, { needs_human: 0, human_reason: null });
+  }
   const updated = db.setOrderStatus(orderId, status, by);
   return { order: updated, warnings };
 }

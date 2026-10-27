@@ -36,6 +36,8 @@ function dropiVerdict(o, waId, allOrders) {
   else if (o.hist_status === 'bajo' && config.history.lowAction === 'prepay') add(false, `Historial ${o.hist_rate ?? '?'}% positivo, bajo el mínimo de ${minRate}%: ${o.prepay_requested_at ? 'se pidió transferencia, falta el comprobante' : o.prepay_error || 'hay que pedir transferencia'}`);
   else if (o.hist_status === 'bajo') add(false, `Historial ${o.hist_rate ?? '?'}% positivo, bajo el mínimo de ${minRate}%: decidir si se despacha (la clienta no fue avisada)`);
   else add(null, 'Historial en Dropi aún sin revisar (se revisa cada hora)');
+  if (o.status === 'pending' && o.no_reply_at) add(false, 'La clienta no responde los recordatorios: llamarla o cancelar');
+  else if (o.status === 'pending' && (o.fu1_at || o.fu_tpl_at)) add(null, `Recordatorio enviado${o.fu2_at || o.fu_tpl_at ? ' (último aviso)' : ''}, esperando respuesta`);
   const same = shopify.samePhone(o.phone, waId);
   add(same ? true : null, same ? 'El WhatsApp coincide con el teléfono del pedido' : 'El WhatsApp no coincide con el teléfono del pedido');
   const week = Date.now() - 7 * 86400e3;
