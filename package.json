@@ -8,7 +8,7 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "start": "node scripts/restore.js && node --disable-warning=ExperimentalWarning src/server.js",
     "demo": "DEMO=true STORE_NAME='Her Essence' node --disable-warning=ExperimentalWarning src/server.js"
   }
 }

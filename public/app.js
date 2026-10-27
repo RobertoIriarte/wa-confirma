@@ -141,6 +141,7 @@ function renderHealth(s) {
     s.whatsapp ? ['on', 'WhatsApp conectado'] : ['sim', 'WhatsApp simulado'],
     shop,
     s.ai ? ['on', `IA activa (${s.aiName || ''})`] : ['', 'IA desactivada'],
+    ...(s.jobsPaused ? [['', 'Servidor trasladado: tareas automáticas pausadas']] : []),
     s.maps ? ['on', 'Direcciones: Google Maps'] : s.demo ? ['sim', 'Google Maps simulado'] : ['on', 'Direcciones: OpenStreetMap'],
   ];
   $('#health').innerHTML = items.map(([c, t]) => `<li><span class="dot ${c}"></span>${esc(t)}</li>`).join('');

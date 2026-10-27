@@ -14,6 +14,7 @@ import * as reminders from './reminders.js';
 import { mediaPath, saveMedia, MIME as MEDIA_MIME } from './media.js';
 import { sendShippingNotice } from './shipping.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
+import { buildExport, jobsPaused, setJobsPaused } from './migrate.js';
 
 // Veredicto para confirmar en Dropi, con sus razones
 function dropiVerdict(o, waId, allOrders) {
@@ -134,7 +135,19 @@ async function api(req, res, url) {
 
   if (p === '/api/status') {
     let shop = null; try { shop = await shopify.ping(); } catch (e) { shop = { ok: false, reason: e.message }; }
-    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password) });
+    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password), jobsPaused: jobsPaused() });
+  }
+  // Traslado a otro servidor: entrega todo y pausa las tareas automáticas aquí
+  if (p === '/api/admin/export' && req.method === 'GET') {
+    const { gz, count } = buildExport();
+    setJobsPaused(true);
+    console.log(`[traslado] Exportados ${count} archivos; tareas automáticas pausadas en este servidor.`);
+    return send(res, 200, gz, { 'Content-Type': 'application/gzip', 'Content-Disposition': 'attachment; filename="wa-confirma.bin.gz"' });
+  }
+  if (p === '/api/admin/jobs' && req.method === 'POST') {
+    const { paused } = await json(req);
+    setJobsPaused(Boolean(paused));
+    return send(res, 200, { ok: true, jobsPaused: jobsPaused() });
   }
   let mm = p.match(/^\/api\/media\/([\w.-]+)$/);
   if (mm) {

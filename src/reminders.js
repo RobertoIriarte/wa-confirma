@@ -1,5 +1,6 @@
 // Pedidos que terminaron la compra pero no enviaron el mensaje de WhatsApp:
 // se sincronizan desde Shopify, se listan en el panel y (opcional) reciben un recordatorio.
+import { jobsPaused } from './migrate.js';
 import { config, shopifyReady, whatsappReady } from './config.js';
 import * as db from './db.js';
 import * as shopify from './shopify.js';
@@ -147,6 +148,7 @@ export function startScheduler() {
     return;
   }
   const tick = async () => {
+    if (jobsPaused()) return; // servidor viejo después de un traslado
     try { await syncOrders(); await runAutoReminders(); await runShippingNotices(); }
     catch (e) { console.error('[sync]', e.message); }
   };
