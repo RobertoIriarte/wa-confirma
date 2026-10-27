@@ -21,6 +21,7 @@ export const config = {
     token: env.WHATSAPP_TOKEN || '',
     phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || '',
     verifyToken: env.WHATSAPP_VERIFY_TOKEN || '',
+    reopenTemplate: env.REOPEN_TEMPLATE ?? 'retomar_conversacion', // plantilla para escribir pasadas 24 h (variable {{1}} = nombre)
     appSecret: env.META_APP_SECRET || '',
     graphVersion: env.GRAPH_API_VERSION || 'v23.0',
   },

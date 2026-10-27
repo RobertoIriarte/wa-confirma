@@ -208,6 +208,16 @@ async function api(req, res, url) {
       const r = await wa.sendText(waId, text.trim(), 'human');
       return send(res, r.ok ? 200 : 502, r);
     }
+    // Pasadas 24 h sin mensajes de la clienta: plantilla aprobada para retomar la conversación
+    if (action === 'reopen' && req.method === 'POST') {
+      const name = config.whatsapp.reopenTemplate;
+      if (!name) return send(res, 400, { error: 'Falta configurar la plantilla para retomar' });
+      const first = String(contact?.name || '').trim().split(/\s+/)[0] || 'clienta';
+      db.updateContact(waId, { bot_paused: 1, needs_human: 0 });
+      const r = await wa.sendTemplate(waId, { name, language: config.reminders.language, bodyParams: [first], preview: `Hola ${first} 💗 Le escribimos de ${config.store.name} para darle seguimiento a su consulta. Por favor responda este mensaje cuando pueda y le atendemos por aquí. ¡Gracias!` }, 'human');
+      if (r.retry) return send(res, 409, { error: `La plantilla "${name}" aún no está aprobada en Meta` });
+      return send(res, r.ok ? 200 : 502, r);
+    }
     if (action === 'image' && req.method === 'POST') {
       const mime = String(req.headers['content-type'] || '').split(';')[0];
       if (!['image/jpeg', 'image/png'].includes(mime)) return send(res, 400, { error: 'Solo se pueden enviar fotos JPG o PNG' });

@@ -220,6 +220,15 @@ $('#archiveConv').addEventListener('click', async () => {
     loadConv(); loadList();
   } catch (e) { toast(e.message); }
 });
+$('#reopenBtn').addEventListener('click', async () => {
+  const c = state.detail?.contact; if (!c) return;
+  const b = $('#reopenBtn'); b.disabled = true;
+  try {
+    await api(`/api/conversations/${encodeURIComponent(c.wa_id)}/reopen`, { method: 'POST', body: {} });
+    toast('Plantilla enviada. Cuando la clienta responda, podrá escribirle normal.');
+    loadConv(); loadList();
+  } catch (e) { toast(e.message); } finally { b.disabled = false; }
+});
 $('#toggleOrder').addEventListener('click', () => $('#orderPane').classList.toggle('open'));
 
 async function loadConv(scroll = false) {

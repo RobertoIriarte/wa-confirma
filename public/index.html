@@ -117,7 +117,7 @@
           <div id="humanBanner" class="banner" hidden></div>
           <ol id="messages" class="messages"></ol>
           <form id="composer" class="composer">
-            <p id="windowNote" class="window-note" hidden><span class="long">Pasaron más de 24 horas desde el último mensaje del cliente. WhatsApp no permite responder con texto libre hasta que vuelva a escribir.</span><span class="short">Más de 24 h sin mensajes de la clienta: no puedes escribirle hasta que ella escriba.</span></p>
+            <div id="windowNote" class="window-note" hidden><span class="long">Pasaron más de 24 horas desde el último mensaje de la clienta: WhatsApp no deja escribirle texto libre. Envíele la plantilla para retomar; cuando responda, puede escribirle normal.</span><span class="short">Más de 24 h sin mensajes: envíe la plantilla para retomar.</span> <button id="reopenBtn" class="btn primary" type="button">Enviar plantilla para retomar</button></div>
             <div class="composer-row">
               <button class="attach-btn" type="button" id="attachBtn" aria-label="Enviar una foto" title="Enviar una foto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="m21 17-5-5-8 8"/></svg></button>
               <input type="file" id="attachInput" accept="image/*" hidden>
