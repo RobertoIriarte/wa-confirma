@@ -1,6 +1,6 @@
 // Tareas con Dropi que antes hacían las tareas programadas de Claude (ahora sin gastar tokens):
 //  1) Historial de la clienta apenas entra el pedido → etiqueta HIST-* + línea "Historial Dropi:" en Shopify
-//  2) Estado del envío cada 30 min → etiqueta ENVIO-* + línea "Envío Dropi:" en Shopify, y aviso a la clienta
+//  2) Estado del envío cada hora → etiqueta ENVIO-* + línea "Envío Dropi:" en Shopify, y aviso a la clienta
 // Escribe en Shopify con el mismo formato de antes, así el resto del bot no cambia.
 import { config } from './config.js';
 import * as db from './db.js';
@@ -119,7 +119,7 @@ export function matchDropi(shopOrders, dropiOrders) {
 let lastShipRun = 0;
 export async function syncShipping({ force = false } = {}) {
   if (!dropiConnected()) return { skipped: 'Dropi sin conectar' };
-  const every = Number(process.env.DROPI_SHIP_MINUTES || 30) * 60e3;
+  const every = Number(process.env.DROPI_SHIP_MINUTES || 60) * 60e3;
   if (!force && Date.now() - lastShipRun < every) return { skipped: 'intervalo' };
   const h = chileHour();
   if (!force && (h < 7 || h >= 22)) return { skipped: 'fuera de horario' };

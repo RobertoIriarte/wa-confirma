@@ -143,11 +143,14 @@ export async function sendReminder(orderId, { manual = false } = {}) {
 }
 
 export async function runAutoReminders() {
-  if (!remindersEnabled() || inQuietHours()) return;
+  if (!remindersEnabled()) return;
   const since = db.getSetting('reminders_since');
   const dayAgo = new Date(Date.now() - 24 * 3600e3).toISOString();
+  // De noche solo se escribe a quien acaba de comprar (está despierta); los demás esperan a la mañana
+  const fresh = new Date(Date.now() - 2 * 3600e3).toISOString();
+  const quiet = inQuietHours();
   const due = db.silentOrders({ olderThanMin: R.afterMinutes })
-    .filter((o) => !o.reminder_status && o.created_at >= (since || db.now()) && o.created_at >= dayAgo);
+    .filter((o) => !o.reminder_status && o.created_at >= (since || db.now()) && o.created_at >= dayAgo && (!quiet || o.created_at >= fresh));
   for (const o of due) {
     try { await sendReminder(o.id); } catch (e) { console.error('[recordatorio]', o.name, e.message); }
   }
