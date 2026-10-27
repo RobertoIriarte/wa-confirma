@@ -92,6 +92,11 @@ export async function syncOrders() {
         try { await handleLowHistory(cur); } catch (e) { console.error('[historial]', e.message); }
       }
     }
+    // Dropify no pudo crear el pedido en Dropi
+    if (linked && (o.tags || []).some((t) => /dropi sync error/i.test(t)) && !linked.dropi_sync_error) {
+      const why = (String(o.note || '').match(/Nota Dropi:\s*([^\n]*?)\s*-*\s*$/m) || [])[1] || 'error al sincronizar';
+      db.updateOrder(o.id, { dropi_sync_error: why.trim() || 'error al sincronizar' });
+    }
     // Estado del envío escrito por la tarea programada → se guarda y (si corresponde) se avisa a la clienta
     if (linked && o.shipping?.status) updateShipping(o.id, o.shipping);
   }

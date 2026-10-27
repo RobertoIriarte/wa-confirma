@@ -11,7 +11,7 @@ import { dropiConnected, listOrders } from './dropi.js';
 import { matchDropi, isDeadStatus } from './dropi-sync.js';
 import { SHIP_LABEL } from './shipping.js';
 
-for (const col of ['dropi_order_id', 'dropi_status', 'alert_nodropi_at', 'alert_cancel_dropi_at', 'alert_stalled_for', 'nov_reminder_at']) {
+for (const col of ['dropi_sync_error', 'alert_sync_err_at', 'dropi_order_id', 'dropi_status', 'alert_nodropi_at', 'alert_cancel_dropi_at', 'alert_stalled_for', 'nov_reminder_at']) {
   try { db.db.exec(`ALTER TABLE orders ADD COLUMN ${col} TEXT`); } catch { /* ya existe */ }
 }
 
@@ -47,6 +47,13 @@ export async function runAlerts({ force = false } = {}) {
   if (!force && Date.now() - lastRun < A.everyMin * 60e3) return;
   lastRun = Date.now();
   const since = new Date(Date.now() - 12 * 24 * H).toISOString();
+
+  // ---- 0: Dropify no pudo crear el pedido en Dropi (etiqueta "Dropi Sync Error") → aviso inmediato al confirmar ----
+  for (const o of db.db.prepare(`SELECT * FROM orders WHERE dropi_sync_error IS NOT NULL AND alert_sync_err_at IS NULL
+      AND status = 'confirmed' AND ship_status IS NULL AND wa_id IS NOT NULL`).all()) {
+    raise(o, 'alert_sync_err_at', db.now(), `Dropify no pudo crear el pedido ${o.name} en Dropi (${o.dropi_sync_error}). Créelo a mano en Dropi o reintente desde Dropify`, 'alert_sync_error');
+    db.updateOrder(o.id, { alert_nodropi_at: db.now() }); // no repetir con la alerta de 24 h
+  }
 
   // ---- 1 y 2: necesitan saber qué hay en Dropi ----
   if (dropiConnected()) {
