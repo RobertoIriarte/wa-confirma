@@ -15,6 +15,8 @@ import { mediaPath, saveMedia, MIME as MEDIA_MIME } from './media.js';
 import { sendShippingNotice } from './shipping.js';
 import { ensureAddressChecked, addressDetail } from './address.js';
 import { buildExport, jobsPaused, setJobsPaused } from './migrate.js';
+import * as dropi from './dropi.js';
+import { syncShipping } from './dropi-sync.js';
 
 // Veredicto para confirmar en Dropi, con sus razones
 function dropiVerdict(o, waId, allOrders) {
@@ -135,7 +137,28 @@ async function api(req, res, url) {
 
   if (p === '/api/status') {
     let shop = null; try { shop = await shopify.ping(); } catch (e) { shop = { ok: false, reason: e.message }; }
-    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password), jobsPaused: jobsPaused() });
+    return send(res, 200, { store: config.store.name, demo: config.demo, whatsapp: whatsappReady(), shopify: shop, ai: aiReady(), aiName: aiModelName(), historyAction: config.history.lowAction, maps: Boolean(config.maps.apiKey), model: config.ai.model, autoCancel: config.shopify.autoCancel, hasPassword: Boolean(config.dashboard.password), jobsPaused: jobsPaused(), dropi: dropi.dropiStatus() });
+  }
+  // Conexión con Dropi: la dueña inicia sesión una vez
+  if (p === '/api/dropi/connect' && req.method === 'GET') {
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+    try {
+      const to = await dropi.startLogin(`${proto}://${host}/api/dropi/callback`);
+      res.writeHead(302, { Location: to }); return res.end();
+    } catch (e) { return send(res, 502, `No se pudo iniciar la conexión con Dropi: ${e.message}`); }
+  }
+  if (p === '/api/dropi/callback' && req.method === 'GET') {
+    const err = url.searchParams.get('error');
+    try {
+      if (err) throw new Error(url.searchParams.get('error_description') || err);
+      await dropi.finishLogin(url.searchParams.get('code'), url.searchParams.get('state'));
+      res.writeHead(302, { Location: '/?dropi=ok' }); return res.end();
+    } catch (e) { return send(res, 400, `Dropi no quedó conectado: ${e.message}`); }
+  }
+  if (p === '/api/dropi/disconnect' && req.method === 'POST') { dropi.disconnect(); return send(res, 200, { ok: true }); }
+  if (p === '/api/dropi/ship-sync' && req.method === 'POST') {
+    try { return send(res, 200, await syncShipping({ force: true })); } catch (e) { return send(res, 502, { error: e.message }); }
   }
   // Traslado a otro servidor: entrega todo y pausa las tareas automáticas aquí
   if (p === '/api/admin/export' && req.method === 'GET') {

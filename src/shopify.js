@@ -146,6 +146,22 @@ export async function cancelOrder(id, note) {
   return { ok: true };
 }
 
+// Cambia la nota del pedido (el que llama ya armó la nota completa, respetando las otras líneas)
+export async function setNote(id, note) {
+  if (!shopifyReady()) return { simulated: true };
+  const d = await gql(`mutation SetNote($input: OrderInput!) { orderUpdate(input: $input) { order { id } userErrors { field message } } }`, { input: { id, note } });
+  const errs = d.orderUpdate.userErrors; if (errs.length) throw new Error(errs.map((e) => e.message).join('; '));
+  return { ok: true };
+}
+
+// Pedidos abiertos de los últimos días cuyo envío todavía no termina
+export async function listShippingCandidates(days = 10) {
+  if (!shopifyReady()) return [];
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const d = await gql(FIND, { q: `created_at:>='${since}' status:open tag_not:ENVIO-ENTREGADO tag_not:ENVIO-DEVUELTO`, n: 100 });
+  return d.orders.nodes.map(mapOrder);
+}
+
 export async function ping() {
   if (!shopifyReady()) return { ok: false, reason: config.demo ? 'demo' : 'sin configurar' };
   const d = await gql('{ shop { name } }');

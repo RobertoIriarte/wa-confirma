@@ -144,7 +144,11 @@ function renderHealth(s) {
     ...(s.jobsPaused ? [['', 'Servidor trasladado: tareas automáticas pausadas']] : []),
     s.maps ? ['on', 'Direcciones: Google Maps'] : s.demo ? ['sim', 'Google Maps simulado'] : ['on', 'Direcciones: OpenStreetMap'],
   ];
-  $('#health').innerHTML = items.map(([c, t]) => `<li><span class="dot ${c}"></span>${esc(t)}</li>`).join('');
+  const d = s.dropi || {};
+  const dropiItem = d.connected
+    ? `<li title="${esc(d.lastError || '')}"><span class="dot ${d.lastError ? '' : 'on'}"></span>Dropi: ${d.lastError ? 'con error, <a href="/api/dropi/connect">reconectar</a>' : 'conectado'}</li>`
+    : (s.demo ? '' : '<li><span class="dot"></span><a href="/api/dropi/connect">Conectar Dropi</a></li>');
+  $('#health').innerHTML = items.map(([c, t]) => `<li><span class="dot ${c}"></span>${esc(t)}</li>`).join('') + dropiItem;
   $('#simulator').hidden = !s.demo;
 }
 

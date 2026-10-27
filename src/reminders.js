@@ -1,6 +1,8 @@
 // Pedidos que terminaron la compra pero no enviaron el mensaje de WhatsApp:
 // se sincronizan desde Shopify, se listan en el panel y (opcional) reciben un recordatorio.
 import { jobsPaused } from './migrate.js';
+import { dropiConnected } from './dropi.js';
+import { checkHistory, syncShipping } from './dropi-sync.js';
 import { config, shopifyReady, whatsappReady } from './config.js';
 import * as db from './db.js';
 import * as shopify from './shopify.js';
@@ -74,6 +76,8 @@ export async function syncOrders() {
   // Solo se recuerdan pedidos creados después de activar el sistema (nunca los antiguos)
   if (!db.getSetting('reminders_since')) db.setSetting('reminders_since', new Date().toISOString());
   const list = await shopify.listRecentOrders(config.sync.days);
+  // Historial en Dropi apenas entra el pedido (conexión directa, sin tareas programadas)
+  try { await checkHistory(list); } catch (e) { console.error('[dropi historial]', e.message); }
   for (const o of list) {
     db.upsertShopOrder(o);
     // Historial escrito por la revisión programada → actualizar el pedido y, si es bajo y ya confirmó, pedir transferencia
@@ -92,7 +96,7 @@ export async function syncOrders() {
   db.setSetting('last_sync_at', new Date().toISOString());
   // Pedidos recientes (últimas 6 h), abiertos y sin historial revisado → pedir revisión inmediata
   const recent = list.filter((o) => !o.cancelled && !o.history?.status && Date.now() - new Date(o.createdAt) < 6 * 3600e3);
-  if (recent.length) await fireHistoryReview(recent);
+  if (recent.length && !dropiConnected()) await fireHistoryReview(recent);
   return { count: list.length };
 }
 
@@ -149,7 +153,7 @@ export function startScheduler() {
   }
   const tick = async () => {
     if (jobsPaused()) return; // servidor viejo después de un traslado
-    try { await syncOrders(); await runAutoReminders(); await runShippingNotices(); }
+    try { await syncOrders(); try { await syncShipping(); } catch (e) { console.error('[dropi envío]', e.message); } await runAutoReminders(); await runShippingNotices(); }
     catch (e) { console.error('[sync]', e.message); }
   };
   setTimeout(tick, 3000);
